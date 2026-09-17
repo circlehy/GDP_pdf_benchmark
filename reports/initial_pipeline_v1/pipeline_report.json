@@ -1,0 +1,135 @@
+{
+  "applied_bbox_repairs": 0,
+  "applied_rubric_overrides": 3,
+  "blockers": [
+    "export_not_release_ready"
+  ],
+  "difficulty_admitted": 0,
+  "difficulty_assessed": 1,
+  "difficulty_labels": {
+    "medium": 1
+  },
+  "documents": 3,
+  "export": {
+    "allow_predicted_difficulty": false,
+    "estimated_total_sequence_tokens": 0,
+    "input_path": "/mnt/weka/home/yuan.huang/GDP_pdf_benchmark/data/runs/initial_pipeline_v1/hard.jsonl",
+    "rejected_records": 1,
+    "release_ready": false,
+    "run_id": "initial_pipeline_v1",
+    "schema_version": "0.1",
+    "serialization_template_exact": false,
+    "sidecar_records": 0,
+    "split_counts": {
+      "internal_holdout": 0,
+      "train": 0,
+      "validation": 0
+    },
+    "text_content_token_accounting_exact": false,
+    "text_tokenizer_configured": true,
+    "token_accounting_exact": false,
+    "training_records": 0,
+    "vision_token_accounting_exact": false
+  },
+  "final_blockers": {},
+  "final_statuses": {
+    "passed": 1
+  },
+  "generated": 3,
+  "human_review_statuses": {
+    "approved": 1
+  },
+  "release_ready": false,
+  "repaired_records": 1,
+  "run_id": "initial_pipeline_v1",
+  "schema_version": "0.1",
+  "static_accepted": 1,
+  "static_rejected": 2,
+  "static_rejection_reasons": {
+    "gdp_like_structural_gate": 1,
+    "rubric_covers_all_gold_claims": 1
+  },
+  "task_type_distribution": {
+    "structured_layout": 1,
+    "text_reasoning": 1,
+    "visual_spatial": 1
+  },
+  "token_accounting": {
+    "document_text_tokens": 115752,
+    "estimated_input_tokens": 663058,
+    "generated_sequences": [
+      {
+        "document_id": "sha256:9d392eb460a927dff295dda3d11f2a3042eba3b5a85e6b518be6e231fd5f99ef",
+        "estimated_sequence_tokens": 83025,
+        "page_image_tokens": 57518,
+        "pages": 23,
+        "sample_id": "pdfsft_3e50b91d4dd88bfde776",
+        "sequence_utilization": 0.1583576202392578,
+        "text_content_tokens": 25507
+      },
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "estimated_sequence_tokens": 263504,
+        "page_image_tokens": 221430,
+        "pages": 88,
+        "sample_id": "pdfsft_305fe103c90f3166301a",
+        "sequence_utilization": 0.502593994140625,
+        "text_content_tokens": 42074
+      },
+      {
+        "document_id": "sha256:7111746b33b7a23a1ac4d983b15970525d4c9bd79206f20afb79bd9342f9bc4b",
+        "estimated_sequence_tokens": 299706,
+        "page_image_tokens": 249926,
+        "pages": 99,
+        "sample_id": "pdfsft_fc15b35117c4788afdad",
+        "sequence_utilization": 0.5716438293457031,
+        "text_content_tokens": 49780
+      }
+    ],
+    "image_tokens_exact": false,
+    "package_count": 3,
+    "packages": [
+      {
+        "document_id": "sha256:7111746b33b7a23a1ac4d983b15970525d4c9bd79206f20afb79bd9342f9bc4b",
+        "document_text_tokens": 49162,
+        "estimated_input_tokens": 305232,
+        "image_tokens_exact": false,
+        "input_utilization": 0.582183837890625,
+        "page_image_dpi": 150,
+        "page_image_tokens": 249926,
+        "pages": 99,
+        "text_tokens_exact": true
+      },
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "document_text_tokens": 41596,
+        "estimated_input_tokens": 269170,
+        "image_tokens_exact": false,
+        "input_utilization": 0.5134010314941406,
+        "page_image_dpi": 150,
+        "page_image_tokens": 221430,
+        "pages": 88,
+        "text_tokens_exact": true
+      },
+      {
+        "document_id": "sha256:9d392eb460a927dff295dda3d11f2a3042eba3b5a85e6b518be6e231fd5f99ef",
+        "document_text_tokens": 24994,
+        "estimated_input_tokens": 88656,
+        "image_tokens_exact": false,
+        "input_utilization": 0.169097900390625,
+        "page_image_dpi": 150,
+        "page_image_tokens": 57518,
+        "pages": 23,
+        "text_tokens_exact": true
+      }
+    ],
+    "page_image_tokens": 528874,
+    "text_tokens_exact": true,
+    "tokenizer_or_estimator": [
+      "hf-fast:ilikejson-250k-tokenizer:sha256:7e4c364927e79537"
+    ]
+  },
+  "verifier_statuses": {
+    "passed": 1
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "checklist": {
+    "derivations_verified": false,
+    "gold_answer_verified": false,
+    "omitted_page_audit_verified": false,
+    "question_unambiguous": false,
+    "rubric_negative_cases_verified": false,
+    "visual_evidence_verified": false
+  },
+  "decision": "pending",
+  "notes": null,
+  "reviewer": null,
+  "reviewer_type": "human",
+  "sample_id": "pdfsft_9a597827e4a0a78b89e2",
+  "schema_version": "0.1"
+}

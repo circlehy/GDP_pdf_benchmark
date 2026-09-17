@@ -6,8 +6,12 @@ paths:
   documents: "data/documents/documents.jsonl"
   raw_pdfs: "raw_pdfs"
   parsed: "parsed"
+  document_views: "data/document_views"
+  input_packages: "data/input_packages"
   generated: "data/generated/candidates.jsonl"
   verified: "data/validated/verified.jsonl"
+  repaired: "data/validated/repaired.jsonl"
+  finalized: "data/validated/finalized.jsonl"
   rejected: "data/validated/rejected.jsonl"
   hard: "data/validated/hard.jsonl"
   exports: "data/exports"
@@ -24,13 +28,46 @@ security:
   max_pdf_bytes: 209715200
 
 parse:
-  dpi: 144
+  text_extractor: "liteparse"
+  text_extractor_version: "2.5.0"
+  ocr_enabled: true
+  ocr_language: "eng"
+  tessdata_path: ".cache/liteparse/tessdata"
+  num_workers: 4
+  dpi: 150
   image_format: "png"
   native_text_min_chars_per_page: 40
-  enable_ocr_fallback: false
+
+target_input:
+  profile: "multimodal"
+  page_image_dpi: 150
+  minimum_page_image_dpi: 72
+  page_image_packing: "single_page"
+  include_all_pages: true
+  evidence_graph_in_prompt: false
+
+context_budget:
+  model_context_tokens: 524288
+  target_input_utilization: 0.80
+  preferred_input_utilization_min: 0.70
+  preferred_input_utilization_max: 0.85
+  maximum_input_utilization: 0.90
+  minimum_output_and_safety_reserve_tokens: 32768
+  question_reserve_tokens: 4096
+  system_prompt_reserve_tokens: 2048
+  # Set this to the target model's tokenizer directory for exact text-token counts.
+  text_tokenizer_path: null
+  provisional_chars_per_token: 3.5
+  provisional_image_tokens_per_megapixel: 1200
+
+document_view:
+  # Optional explicit bounded views keyed by document_id or its SHA suffix.
+  # A bounded view is frozen before task generation and must later pass omitted-page audit.
+  overrides: {}
 
 generation:
   candidates_per_document: 3
+  max_structure_repair_attempts: 1
   primary_evidence_type_weights:
     visual_spatial: 0.40
     structured_layout: 0.45
@@ -43,6 +80,21 @@ difficulty:
   require_controlling_evidence: true
   require_tier_2_axis: true
   require_tier_3_axis: true
+
+verification:
+  max_reconstruction_attempts: 2
+  minimum_reconstructed_answer_chars: 256
+  require_labeled_subquestion_coverage: true
+  audit_image_scope: "evidence_pages"
+  audit_include_complete_document_text: true
+  audit_include_evidence_crops: true
+  audit_crop_padding_ratio: 0.10
+  audit_crop_min_side_pixels: 256
+  audit_bbox_min_page_token_coverage: 0.45
+  audit_bbox_min_relative_token_coverage: 0.50
+  audit_bbox_repair_max_blocks: 6
+  audit_bbox_repair_min_token_coverage: 0.60
+  audit_bbox_repair_min_improvement: 0.20
 
 models:
   generator:
@@ -59,6 +111,7 @@ models:
     api_key_env: "LOCAL_VLM_API_KEY"
     reasoning_effort: null
     max_output_tokens: 8000
+  verifier_long_context: null
   judge:
     provider: "openai_responses"
     model: "gpt-5.6-sol"

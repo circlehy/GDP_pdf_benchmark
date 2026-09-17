@@ -1,0 +1,14 @@
+{
+  "decisions": [
+    {
+      "accepted_bbox": null,
+      "decision": "pending",
+      "node_id": "e2",
+      "notes": null,
+      "reviewer": null
+    }
+  ],
+  "mutation_applied": false,
+  "sample_id": "pdfsft_9a597827e4a0a78b89e2",
+  "schema_version": "0.1"
+}

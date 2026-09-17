@@ -1,8 +1,11 @@
-"""Render PDF pages and extract native text blocks with normalized coordinates."""
+"""Build the canonical AA-aligned page IR with LiteParse text and page renders."""
 
 from __future__ import annotations
 
+from importlib.metadata import version
+
 import pymupdf
+from liteparse import LiteParse
 
 from pdf_sft.config import AppConfig
 from pdf_sft.io import read_jsonl, write_json_atomic
@@ -35,9 +38,33 @@ def parse_document(record: DocumentRecord, config: AppConfig) -> ParsedDocument:
     parsed_pages: list[ParsedPage] = []
     zoom = config.parse.dpi / 72.0
 
+    text_parser = LiteParse(
+        ocr_enabled=config.parse.ocr_enabled,
+        ocr_language=config.parse.ocr_language,
+        tessdata_path=(
+            str(config.parse.tessdata_path) if config.parse.tessdata_path is not None else None
+        ),
+        dpi=float(config.parse.dpi),
+        output_format="text",
+        quiet=True,
+        num_workers=config.parse.num_workers,
+    )
+    complexity = text_parser.is_complex(pdf_path)
+    liteparse_result = text_parser.parse(pdf_path)
+    liteparse_pages = {page.page_num: page for page in liteparse_result.pages}
+    needs_ocr_by_page = {page.page_number: page.needs_ocr for page in complexity}
+
     with pymupdf.open(pdf_path) as pdf:
+        if len(liteparse_pages) != len(pdf):
+            raise ValueError(
+                f"LiteParse returned {len(liteparse_pages)} pages for {record.document_id}; "
+                f"PDF contains {len(pdf)} pages"
+            )
         for page_index, page in enumerate(pdf):
             page_number = page_index + 1
+            liteparse_page = liteparse_pages.get(page_number)
+            if liteparse_page is None:
+                raise ValueError(f"LiteParse omitted page {page_number} for {record.document_id}")
             image_path = output_root / f"page_{page_number:04d}.png"
             pixmap = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
             pixmap.save(image_path)
@@ -63,10 +90,13 @@ def parse_document(record: DocumentRecord, config: AppConfig) -> ParsedDocument:
                     width_points=page.rect.width,
                     height_points=page.rect.height,
                     image_path=image_path.resolve(),
+                    extracted_text=liteparse_page.text,
+                    extracted_text_chars=len(liteparse_page.text.strip()),
                     native_text=native_text,
                     native_text_chars=len(native_text.strip()),
-                    needs_ocr=(
-                        len(native_text.strip()) < config.parse.native_text_min_chars_per_page
+                    needs_ocr=needs_ocr_by_page.get(
+                        page_number,
+                        len(native_text.strip()) < config.parse.native_text_min_chars_per_page,
                     ),
                     blocks=blocks,
                 )
@@ -74,8 +104,13 @@ def parse_document(record: DocumentRecord, config: AppConfig) -> ParsedDocument:
 
     parsed = ParsedDocument(
         document_id=record.document_id,
-        parser="pymupdf",
-        parser_version=pymupdf.__version__,
+        schema_version="0.2",
+        parser="liteparse",
+        parser_version=version("liteparse"),
+        renderer="pymupdf",
+        renderer_version=pymupdf.__version__,
+        ocr_enabled=config.parse.ocr_enabled,
+        ocr_language=config.parse.ocr_language,
         dpi=config.parse.dpi,
         page_count=len(parsed_pages),
         pages=parsed_pages,

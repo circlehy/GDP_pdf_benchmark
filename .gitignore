@@ -32,3 +32,4 @@ benchmarks/*
 .vscode/
 .pytest_cache/
 .ruff_cache/
+.cache/

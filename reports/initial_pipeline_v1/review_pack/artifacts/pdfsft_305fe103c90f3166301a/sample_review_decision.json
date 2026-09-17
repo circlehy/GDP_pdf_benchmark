@@ -1,0 +1,33 @@
+{
+  "checklist": {
+    "derivations_verified": true,
+    "gold_answer_verified": true,
+    "omitted_page_audit_verified": false,
+    "question_unambiguous": true,
+    "rubric_negative_cases_verified": true,
+    "visual_evidence_verified": false
+  },
+  "decision": "approved",
+  "notes": "Human confirmed the question, gold answer, and derivations. Rubric was narrowed to requested outputs, the explicit footnote requirement was made major, and the duplicate footnote penalty was removed from r6.",
+  "reviewer": "yuan.huang",
+  "reviewer_type": "human",
+  "rubric_overrides": [
+    {
+      "criterion_id": "r2",
+      "criterion": "Reports the nominal room-temperature load voltage for each qualifying couple accurately: lithium-thionyl chloride 3.3 V, Li-BCX 3.2 V, lithium-sulfur dioxide 2.8 V, and lithium-polycarbon monofluoride 2.7 V. Supporting energy-density, temperature, and shelf-life values are not required to be restated, but any such values included in the answer must be accurate.",
+      "reason": "Do not require the answer to restate every screening value when the prompt asks for the qualifying set and nominal voltages."
+    },
+    {
+      "criterion_id": "r5",
+      "reason": "The footnote caveat is an explicit part of the question, so omitting it is a major error.",
+      "severity": "major"
+    },
+    {
+      "criterion_id": "r6",
+      "criterion": "Does not dodge the simultaneous three-condition filter by including zinc-air alkaline, lithium-manganese dioxide, lithium-iron disulfide, or another nonqualifying couple in the final qualifying set.",
+      "reason": "Remove the duplicate footnote penalty; r5 independently covers the explicit footnote requirement."
+    }
+  ],
+  "sample_id": "pdfsft_305fe103c90f3166301a",
+  "schema_version": "0.1"
+}

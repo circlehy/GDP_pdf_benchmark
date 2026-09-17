@@ -1,0 +1,21 @@
+{
+  "decisions": [
+    {
+      "accepted_bbox": null,
+      "decision": "pending",
+      "node_id": "e1",
+      "notes": null,
+      "reviewer": null
+    },
+    {
+      "accepted_bbox": null,
+      "decision": "pending",
+      "node_id": "e5",
+      "notes": null,
+      "reviewer": null
+    }
+  ],
+  "mutation_applied": false,
+  "sample_id": "pdfsft_35881147e2b90133fd05",
+  "schema_version": "0.1"
+}

@@ -1,0 +1,56 @@
+{
+  "document_id": "sha256:9d392eb460a927dff295dda3d11f2a3042eba3b5a85e6b518be6e231fd5f99ef",
+  "generator": "deterministic_liteparse_block_match_v0",
+  "mutation_applied": false,
+  "sample_id": "pdfsft_05585b1a694ae6f31a13",
+  "schema_version": "0.1",
+  "suggestions": [
+    {
+      "alignment_status": "misaligned",
+      "confidence": "high",
+      "matched_block_ids": [
+        "p13_b11",
+        "p13_b12",
+        "p13_b13"
+      ],
+      "node_id": "e1",
+      "original_bbox": {
+        "x0": 0.05,
+        "x1": 0.95,
+        "y0": 0.3,
+        "y1": 0.58
+      },
+      "original_token_coverage": 0.0455,
+      "page_number": 13,
+      "reason": "Suggested bbox is the union of the highest-scoring contiguous LiteParse block window. Human acceptance is required before mutation.",
+      "score": 0.7168,
+      "suggested_bbox": {
+        "x0": 0.16806874953441994,
+        "x1": 0.8740019286717118,
+        "y0": 0.5841007087143791,
+        "y1": 0.7302216390832685
+      },
+      "suggested_token_coverage": 0.8182
+    },
+    {
+      "alignment_status": "misaligned",
+      "confidence": "none",
+      "matched_block_ids": [
+        "p14_b2"
+      ],
+      "node_id": "e2",
+      "original_bbox": {
+        "x0": 0.22,
+        "x1": 0.78,
+        "y0": 0.04,
+        "y1": 0.46
+      },
+      "original_token_coverage": 0.0,
+      "page_number": 14,
+      "reason": "Best block window does not meet the configured coverage and improvement thresholds; no replacement bbox is proposed.",
+      "score": 0.0904,
+      "suggested_bbox": null,
+      "suggested_token_coverage": 0.0769
+    }
+  ]
+}

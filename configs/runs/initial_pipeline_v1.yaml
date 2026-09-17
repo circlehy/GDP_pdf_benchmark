@@ -1,0 +1,19 @@
+extends: "configs/runs/local_glm_generate_qwen_verify.yaml"
+run_id: "initial_pipeline_v1"
+
+paths:
+  document_views: "data/runs/initial_pipeline_v1/document_views"
+  input_packages: "data/runs/initial_pipeline_v1/input_packages"
+  generated: "data/runs/initial_pipeline_v1/generated.jsonl"
+  verified: "data/runs/initial_pipeline_v1/verified.jsonl"
+  repaired: "data/runs/initial_pipeline_v1/repaired.jsonl"
+  finalized: "data/runs/initial_pipeline_v1/finalized.jsonl"
+  rejected: "data/runs/initial_pipeline_v1/rejected.jsonl"
+  hard: "data/runs/initial_pipeline_v1/hard.jsonl"
+  exports: "data/runs/initial_pipeline_v1/exports"
+
+generation:
+  candidates_per_document: 1
+
+context_budget:
+  text_tokenizer_path: "/mnt/weka/shrd/k2m/mikhail.yurochkin/ilikejson-250k-tokenizer"

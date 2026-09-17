@@ -54,7 +54,14 @@ class StructuredModelClient:
             raise ModelConfigurationError(
                 f"Environment variable {config.api_key_env} is required for {config.model}"
             )
-        self.client = OpenAI(api_key=api_key, base_url=config.base_url)
+        base_url = config.base_url
+        if config.base_url_env is not None:
+            base_url = os.environ.get(config.base_url_env, "").strip()
+            if not base_url:
+                raise ModelConfigurationError(
+                    f"Environment variable {config.base_url_env} is required for {config.model}"
+                )
+        self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.last_call_metadata: dict = {}
         self.last_raw_output: str | None = None
 
@@ -67,6 +74,10 @@ class StructuredModelClient:
         image_paths: list[Path] | None = None,
         prompt_cache_key: str | None = None,
     ) -> OutputT:
+        # Never let metadata from a previous request masquerade as the current
+        # failure when transport or validation aborts before a response arrives.
+        self.last_call_metadata = {}
+        self.last_raw_output = None
         if self.config.provider == "openai_responses":
             return self._responses_generate(
                 prompt=prompt,
@@ -145,6 +156,13 @@ class StructuredModelClient:
             ),
             "output_characters": len(response.output_text),
             "usage": response.usage.model_dump(mode="json") if response.usage else None,
+            "inference_parameters": {
+                "reasoning_effort": self.config.reasoning_effort,
+                "context_window_tokens": self.config.context_window_tokens,
+                "max_output_tokens": self.config.max_output_tokens,
+                "temperature": self.config.temperature,
+                "top_p": self.config.top_p,
+            },
         }
         return output_type.model_validate_json(response.output_text)
 
@@ -155,7 +173,7 @@ class StructuredModelClient:
         output_type: type[OutputT],
         image_paths: list[Path],
     ) -> OutputT:
-        content: list[dict] = [{"type": "text", "text": prompt}]
+        content: list[dict] = []
         for image_path in image_paths:
             content.append(
                 {
@@ -163,11 +181,12 @@ class StructuredModelClient:
                     "image_url": {"url": _data_url(image_path, "image/png")},
                 }
             )
-        response = self.client.chat.completions.create(
-            model=self.config.model,
-            messages=[{"role": "user", "content": content}],
-            max_tokens=self.config.max_output_tokens,
-            response_format={
+        content.append({"type": "text", "text": prompt})
+        kwargs = {
+            "model": self.config.model,
+            "messages": [{"role": "user", "content": content}],
+            "max_tokens": self.config.max_output_tokens,
+            "response_format": {
                 "type": "json_schema",
                 "json_schema": {
                     "name": output_type.__name__,
@@ -175,18 +194,41 @@ class StructuredModelClient:
                     "schema": strict_json_schema(output_type),
                 },
             },
+        }
+        if self.config.temperature is not None:
+            kwargs["temperature"] = self.config.temperature
+        if self.config.top_p is not None:
+            kwargs["top_p"] = self.config.top_p
+        if self.config.reasoning_effort:
+            # OpenAI-compatible servers such as vLLM accept this as an extension
+            # field even when the installed OpenAI SDK does not expose it directly.
+            kwargs["extra_body"] = {"reasoning_effort": self.config.reasoning_effort}
+        response = self.client.chat.completions.create(
+            **kwargs,
         )
-        raw = response.choices[0].message.content
-        if not raw:
-            raise ValueError(f"Model {self.config.model} returned no structured content")
+        choice = response.choices[0]
+        message = choice.message
+        raw = message.content
+        reasoning = getattr(message, "reasoning", None)
         self.last_raw_output = raw
         self.last_call_metadata = {
             "response_id": response.id,
             "model": response.model,
             "provider": self.config.provider,
             "status": "completed",
+            "finish_reason": getattr(choice, "finish_reason", None),
             "incomplete_details": None,
-            "output_characters": len(raw),
+            "output_characters": len(raw or ""),
+            "reasoning_characters": len(reasoning or ""),
             "usage": response.usage.model_dump(mode="json") if response.usage else None,
+            "inference_parameters": {
+                "reasoning_effort": self.config.reasoning_effort,
+                "context_window_tokens": self.config.context_window_tokens,
+                "max_output_tokens": self.config.max_output_tokens,
+                "temperature": self.config.temperature,
+                "top_p": self.config.top_p,
+            },
         }
+        if not raw:
+            raise ValueError(f"Model {self.config.model} returned no structured content")
         return output_type.model_validate(json.loads(raw))

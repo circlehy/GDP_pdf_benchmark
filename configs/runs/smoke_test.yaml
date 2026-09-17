@@ -18,5 +18,7 @@ models:
     max_output_tokens: 10000
 
 parse:
-  dpi: 144
-  enable_ocr_fallback: false
+  dpi: 150
+
+target_input:
+  profile: "multimodal"

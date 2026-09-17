@@ -113,6 +113,8 @@ class ParsedPage(StrictModel):
     width_points: float = Field(gt=0)
     height_points: float = Field(gt=0)
     image_path: Path
+    extracted_text: str = ""
+    extracted_text_chars: int = Field(default=0, ge=0)
     native_text: str
     native_text_chars: int = Field(ge=0)
     needs_ocr: bool
@@ -124,6 +126,10 @@ class ParsedDocument(StrictModel):
     document_id: str
     parser: str
     parser_version: str
+    renderer: str = "pymupdf"
+    renderer_version: str | None = None
+    ocr_enabled: bool = False
+    ocr_language: str | None = None
     dpi: int
     parsed_at: datetime = Field(default_factory=utc_now)
     page_count: int = Field(ge=1)
@@ -133,6 +139,115 @@ class ParsedDocument(StrictModel):
     def page_count_matches(self) -> ParsedDocument:
         if self.page_count != len(self.pages):
             raise ValueError("page_count must equal the number of parsed pages")
+        return self
+
+
+class InputProfile(str, Enum):
+    text_only = "text_only"
+    multimodal = "multimodal"
+
+
+class DocumentScope(str, Enum):
+    full_pdf = "full_pdf"
+    bounded = "bounded"
+
+
+class PageRange(StrictModel):
+    start: int = Field(ge=1)
+    end: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def range_is_ordered(self) -> PageRange:
+        if self.end < self.start:
+            raise ValueError("page range end must be greater than or equal to start")
+        return self
+
+
+class DocumentView(StrictModel):
+    schema_version: str = "0.2"
+    document_view_id: str
+    document_id: str
+    scope: DocumentScope
+    source_page_count: int = Field(ge=1)
+    included_page_ranges: list[PageRange] = Field(min_length=1)
+    included_page_numbers: list[int] = Field(min_length=1)
+    truncation_reason: str | None = None
+    frozen: bool = True
+    created_at: datetime = Field(default_factory=utc_now)
+
+    @model_validator(mode="after")
+    def pages_match_scope(self) -> DocumentView:
+        if self.included_page_numbers != sorted(set(self.included_page_numbers)):
+            raise ValueError("included_page_numbers must be unique and sorted")
+        if any(page > self.source_page_count for page in self.included_page_numbers):
+            raise ValueError("document view includes a page beyond the source document")
+        from_ranges = [
+            page
+            for page_range in self.included_page_ranges
+            for page in range(page_range.start, page_range.end + 1)
+        ]
+        if from_ranges != self.included_page_numbers:
+            raise ValueError("included_page_ranges must exactly match included_page_numbers")
+        is_full = self.included_page_numbers == list(range(1, self.source_page_count + 1))
+        if self.scope == DocumentScope.full_pdf and not is_full:
+            raise ValueError("full_pdf document views must contain every source page")
+        if self.scope == DocumentScope.bounded and is_full:
+            raise ValueError("bounded document views must omit at least one source page")
+        if self.scope == DocumentScope.bounded and not self.truncation_reason:
+            raise ValueError("bounded document views require a truncation reason")
+        return self
+
+
+class TokenAccounting(StrictModel):
+    schema_version: str = "0.2"
+    tokenizer_or_estimator: str
+    vision_processor: str | None = None
+    exact: bool = False
+    text_tokens_exact: bool = False
+    image_tokens_exact: bool = False
+    document_text_tokens: int = Field(ge=0)
+    page_image_tokens: int = Field(ge=0)
+    question_reserve_tokens: int = Field(ge=0)
+    system_prompt_reserve_tokens: int = Field(ge=0)
+    answer_and_safety_reserve_tokens: int = Field(ge=0)
+    estimated_input_tokens: int = Field(ge=0)
+    context_window_tokens: int = Field(ge=1)
+    input_utilization: float = Field(ge=0)
+    fits_context: bool
+
+
+class TargetInputPackage(StrictModel):
+    schema_version: str = "0.2"
+    package_id: str
+    document_view_id: str
+    document_id: str
+    profile: InputProfile
+    page_image_dpi: int | None = Field(default=None, ge=72)
+    page_numbers: list[int] = Field(min_length=1)
+    text_empty_page_numbers: list[int] = Field(default_factory=list)
+    document_text: str = Field(min_length=1)
+    page_image_paths: list[Path] = Field(default_factory=list)
+    token_accounting: TokenAccounting
+    created_at: datetime = Field(default_factory=utc_now)
+
+    @model_validator(mode="after")
+    def profile_payload_is_consistent(self) -> TargetInputPackage:
+        if self.page_numbers != sorted(set(self.page_numbers)):
+            raise ValueError("page_numbers must be unique and sorted")
+        if self.text_empty_page_numbers != sorted(set(self.text_empty_page_numbers)):
+            raise ValueError("text_empty_page_numbers must be unique and sorted")
+        if not set(self.text_empty_page_numbers).issubset(self.page_numbers):
+            raise ValueError("text_empty_page_numbers must be included in page_numbers")
+        if self.profile == InputProfile.text_only and self.page_image_paths:
+            raise ValueError("text_only packages cannot include page images")
+        if self.profile == InputProfile.text_only and self.page_image_dpi is not None:
+            raise ValueError("text_only packages cannot define a page image DPI")
+        if self.profile == InputProfile.multimodal and len(self.page_image_paths) != len(
+            self.page_numbers
+        ):
+            raise ValueError("multimodal packages require exactly one image per included page")
+        if self.profile == InputProfile.multimodal and self.page_image_dpi is None:
+            raise ValueError("multimodal packages require a page image DPI")
         return self
 
 
@@ -178,6 +293,26 @@ class EvidenceNode(StrictModel):
     role: EvidenceRole
     excerpt: str | None = None
     key: bool = True
+
+
+class EvidenceBBoxRepairSuggestion(StrictModel):
+    node_id: str
+    page_number: int = Field(ge=1)
+    alignment_status: Literal[
+        "aligned",
+        "misaligned",
+        "missing_page",
+        "not_checkable_no_excerpt",
+        "not_checkable_visual_or_ocr",
+    ]
+    original_bbox: BoundingBox
+    suggested_bbox: BoundingBox | None = None
+    original_token_coverage: float | None = Field(default=None, ge=0, le=1)
+    suggested_token_coverage: float | None = Field(default=None, ge=0, le=1)
+    score: float | None = Field(default=None, ge=0, le=1)
+    confidence: Literal["high", "medium", "low", "none"]
+    matched_block_ids: list[str] = Field(default_factory=list)
+    reason: str
 
 
 class EvidenceOperation(StrictModel):
@@ -243,6 +378,10 @@ class TaskSpec(StrictModel):
     primary_evidence_type: PrimaryEvidenceType
     capability_tags: list[str] = Field(min_length=2)
     capability_axes: list[str] = Field(min_length=2)
+    supported_input_profiles: list[InputProfile] = Field(
+        default_factory=lambda: [InputProfile.multimodal]
+    )
+    requires_visual_evidence: bool = False
     gold_answer: str = Field(min_length=1)
     claims: list[Claim] = Field(min_length=1)
     derivations: list[Derivation] = Field(default_factory=list)
@@ -271,6 +410,8 @@ class GeneratedCandidate(StrictModel):
     schema_version: str = "0.1"
     sample_id: str
     document_id: str
+    document_view_id: str | None = None
+    input_profile: InputProfile = InputProfile.multimodal
     task: TaskSpec
     rubric: list[RubricCriterion] = Field(min_length=1)
     generator_model: str
@@ -313,16 +454,45 @@ class ValidationCheck(StrictModel):
     details: str | None = None
 
 
+class AppliedBBoxRepair(StrictModel):
+    node_id: str
+    page_number: int = Field(ge=1)
+    original_bbox: BoundingBox
+    accepted_bbox: BoundingBox
+    suggestion_confidence: Literal["high", "medium", "low", "none"]
+    matched_block_ids: list[str] = Field(default_factory=list)
+    reviewer: str = Field(min_length=1)
+    notes: str | None = None
+    decision_artifact: Path
+    applied_at: datetime = Field(default_factory=utc_now)
+
+
+class AppliedRubricOverride(StrictModel):
+    criterion_id: str
+    original_criterion: str
+    updated_criterion: str
+    original_severity: Literal["certain_dealbreaker", "major", "minor"]
+    updated_severity: Literal["certain_dealbreaker", "major", "minor"]
+    reviewer: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    decision_artifact: Path
+    applied_at: datetime = Field(default_factory=utc_now)
+
+
 class ValidatedCandidate(StrictModel):
     schema_version: str = "0.1"
     candidate: GeneratedCandidate
     structural_gate: StructuralGateResult
     checks: list[ValidationCheck]
     static_checks_passed: bool
+    bbox_repairs: list[AppliedBBoxRepair] = Field(default_factory=list)
+    rubric_overrides: list[AppliedRubricOverride] = Field(default_factory=list)
     independent_reconstruction: IndependentReconstruction | None = None
     independent_verification: VerificationDecision | None = None
+    independent_verifier_model: str | None = None
     independent_verifier_status: Literal["not_run", "passed", "failed", "needs_review"] = "not_run"
     human_review_status: Literal["not_reviewed", "approved", "rejected"] = "not_reviewed"
+    final_validation_status: Literal["not_run", "passed", "failed", "needs_review"] = "not_run"
     eligible_for_difficulty: bool = False
 
 
@@ -330,6 +500,37 @@ class CriterionJudgment(StrictModel):
     criterion_id: str
     passed: bool
     explanation: str
+
+
+class DifficultyJudgment(StrictModel):
+    solver_answer_correct: bool
+    primary_intent_passed: bool
+    failed_criterion_ids: list[str]
+    failure_class: Literal[
+        "none",
+        "genuine_reasoning_failure",
+        "format_or_service_failure",
+        "ambiguous_or_broken_task",
+    ]
+    explanation: str
+
+
+class DifficultyAssessment(StrictModel):
+    schema_version: str = "0.1"
+    sample_id: str
+    structural_score: float = Field(ge=0, le=1)
+    predicted_label: Literal["hard", "medium", "reject"]
+    mode: Literal["predicted", "judged"]
+    solver_model: str | None = None
+    judge_model: str | None = None
+    judgment: DifficultyJudgment | None = None
+    difficulty_verified: bool = False
+    admitted_as_hard: bool = False
+
+
+class DifficultyRecord(StrictModel):
+    validated: ValidatedCandidate
+    assessment: DifficultyAssessment
 
 
 class StructuralGateResult(StrictModel):

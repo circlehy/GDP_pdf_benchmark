@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -62,8 +62,12 @@ class PathConfig(BaseModel):
     documents: Path
     raw_pdfs: Path
     parsed: Path
+    document_views: Path
+    input_packages: Path
     generated: Path
     verified: Path
+    repaired: Path
+    finalized: Path
     rejected: Path
     hard: Path
     exports: Path
@@ -78,14 +82,72 @@ class SecurityConfig(BaseModel):
 
 
 class ParseConfig(BaseModel):
-    dpi: int = Field(default=144, ge=72, le=400)
+    text_extractor: Literal["liteparse"] = "liteparse"
+    text_extractor_version: str = "2.5.0"
+    ocr_enabled: bool = True
+    ocr_language: str = "eng"
+    tessdata_path: Path | None = None
+    num_workers: int = Field(default=4, ge=1)
+    dpi: int = Field(default=150, ge=72, le=400)
     image_format: str = "png"
     native_text_min_chars_per_page: int = Field(default=40, ge=0)
-    enable_ocr_fallback: bool = False
+
+
+class TargetInputConfig(BaseModel):
+    profile: Literal["text_only", "multimodal"] = "multimodal"
+    page_image_dpi: int = Field(default=150, ge=72, le=400)
+    minimum_page_image_dpi: int = Field(default=72, ge=72, le=400)
+    page_image_packing: Literal["single_page"] = "single_page"
+    include_all_pages: bool = True
+    evidence_graph_in_prompt: bool = False
+
+    @model_validator(mode="after")
+    def minimum_dpi_not_above_default(self) -> TargetInputConfig:
+        if self.minimum_page_image_dpi > self.page_image_dpi:
+            raise ValueError("minimum_page_image_dpi cannot exceed page_image_dpi")
+        return self
+
+
+class ContextBudgetConfig(BaseModel):
+    model_context_tokens: int = Field(default=524_288, ge=1)
+    target_input_utilization: float = Field(default=0.80, gt=0, lt=1)
+    preferred_input_utilization_min: float = Field(default=0.70, gt=0, lt=1)
+    preferred_input_utilization_max: float = Field(default=0.85, gt=0, lt=1)
+    maximum_input_utilization: float = Field(default=0.90, gt=0, le=1)
+    minimum_output_and_safety_reserve_tokens: int = Field(default=32_768, ge=1)
+    question_reserve_tokens: int = Field(default=4_096, ge=0)
+    system_prompt_reserve_tokens: int = Field(default=2_048, ge=0)
+    text_tokenizer_path: Path | None = None
+    provisional_chars_per_token: float = Field(default=3.5, gt=0)
+    provisional_image_tokens_per_megapixel: int = Field(default=1_200, ge=0)
+
+    @model_validator(mode="after")
+    def utilization_limits_are_ordered(self) -> ContextBudgetConfig:
+        values = (
+            self.preferred_input_utilization_min,
+            self.target_input_utilization,
+            self.preferred_input_utilization_max,
+            self.maximum_input_utilization,
+        )
+        if list(values) != sorted(values):
+            raise ValueError("context utilization limits must be monotonically increasing")
+        if self.minimum_output_and_safety_reserve_tokens >= self.model_context_tokens:
+            raise ValueError("context reserve must be smaller than the model context")
+        return self
+
+
+class DocumentViewOverrideConfig(BaseModel):
+    included_page_ranges: list[str] = Field(min_length=1)
+    reason: str = Field(min_length=1)
+
+
+class DocumentViewConfig(BaseModel):
+    overrides: dict[str, DocumentViewOverrideConfig] = Field(default_factory=dict)
 
 
 class GenerationConfig(BaseModel):
     candidates_per_document: int = Field(default=3, ge=1, le=20)
+    max_structure_repair_attempts: int = Field(default=1, ge=0, le=2)
     primary_evidence_type_weights: dict[str, float]
 
     @model_validator(mode="after")
@@ -108,15 +170,47 @@ class ModelConfig(BaseModel):
     provider: str
     model: str
     base_url: str | None = None
+    base_url_env: str | None = None
     api_key_env: str
     reasoning_effort: str | None = None
+    context_window_tokens: int | None = Field(default=None, ge=1)
     max_output_tokens: int = Field(default=8000, ge=1)
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    top_p: float | None = Field(default=None, gt=0, le=1)
+
+    @model_validator(mode="after")
+    def has_unambiguous_base_url(self) -> ModelConfig:
+        if self.base_url is not None and self.base_url_env is not None:
+            raise ValueError("Set only one of base_url or base_url_env")
+        return self
+
+    def estimated_request_fits(self, estimated_input_tokens: int) -> bool:
+        return self.context_window_tokens is None or (
+            estimated_input_tokens + self.max_output_tokens <= self.context_window_tokens
+        )
 
 
 class ModelsConfig(BaseModel):
     generator: ModelConfig
     verifier: ModelConfig
+    verifier_long_context: ModelConfig | None = None
     judge: ModelConfig
+
+
+class VerificationConfig(BaseModel):
+    max_reconstruction_attempts: int = Field(default=2, ge=1, le=3)
+    minimum_reconstructed_answer_chars: int = Field(default=256, ge=1)
+    require_labeled_subquestion_coverage: bool = True
+    audit_image_scope: Literal["full_document", "evidence_pages"] = "evidence_pages"
+    audit_include_complete_document_text: bool = True
+    audit_include_evidence_crops: bool = True
+    audit_crop_padding_ratio: float = Field(default=0.10, ge=0, le=1)
+    audit_crop_min_side_pixels: int = Field(default=256, ge=32)
+    audit_bbox_min_page_token_coverage: float = Field(default=0.45, ge=0, le=1)
+    audit_bbox_min_relative_token_coverage: float = Field(default=0.50, ge=0, le=1)
+    audit_bbox_repair_max_blocks: int = Field(default=6, ge=1, le=20)
+    audit_bbox_repair_min_token_coverage: float = Field(default=0.60, ge=0, le=1)
+    audit_bbox_repair_min_improvement: float = Field(default=0.20, ge=0, le=1)
 
 
 class AppConfig(BaseModel):
@@ -130,9 +224,13 @@ class AppConfig(BaseModel):
     paths: PathConfig
     security: SecurityConfig
     parse: ParseConfig
+    target_input: TargetInputConfig
+    context_budget: ContextBudgetConfig
+    document_view: DocumentViewConfig = Field(default_factory=DocumentViewConfig)
     generation: GenerationConfig
     difficulty: DifficultyConfig
     models: ModelsConfig
+    verification: VerificationConfig = Field(default_factory=VerificationConfig)
 
     def resolve_paths(self, cwd: Path | None = None) -> AppConfig:
         cwd = (cwd or Path.cwd()).resolve()
@@ -148,6 +246,15 @@ class AppConfig(BaseModel):
             self.source_manifest = (root / self.source_manifest).resolve()
         if self.secrets_file is not None and not self.secrets_file.is_absolute():
             self.secrets_file = (root / self.secrets_file).resolve()
+        if self.parse.tessdata_path is not None and not self.parse.tessdata_path.is_absolute():
+            self.parse.tessdata_path = (root / self.parse.tessdata_path).resolve()
+        if (
+            self.context_budget.text_tokenizer_path is not None
+            and not self.context_budget.text_tokenizer_path.is_absolute()
+        ):
+            self.context_budget.text_tokenizer_path = (
+                root / self.context_budget.text_tokenizer_path
+            ).resolve()
         self.security.forbidden_input_roots = [
             path if path.is_absolute() else (root / path).resolve()
             for path in self.security.forbidden_input_roots

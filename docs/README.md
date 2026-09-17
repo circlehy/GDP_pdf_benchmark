@@ -13,7 +13,8 @@ docs/
 │   └── gdp_like_task_design_spec.md
 ├── research/
 │   ├── gdp_pdf_benchmark_analysis.zh-CN.md
-│   └── gdp_pdf_benchmark_analysis.en.md
+│   ├── gdp_pdf_benchmark_analysis.en.md
+│   └── local_multimodal_generator_shortlist_2026-09.md
 └── guides/
     └── keenable_search_cluster_guide.md
 ```
@@ -25,8 +26,9 @@ docs/
 | 1 | [`plans/multimodal_pdf_sft_initial_pipeline.md`](./plans/multimodal_pdf_sft_initial_pipeline.md) | 项目目标、技术栈、数据源、阶段流程、模型服务、训练评测和里程碑 | **Source of Truth** |
 | 2 | [`specs/gdp_like_task_design_spec.md`](./specs/gdp_like_task_design_spec.md) | GDP-like task、gold、evidence graph、rubric 和困难准入的详细规范 | **Normative Spec** |
 | 3 | [`research/gdp_pdf_benchmark_analysis.zh-CN.md`](./research/gdp_pdf_benchmark_analysis.zh-CN.md) | GDP.pdf 数据、任务分布、文档模态和 AA 评分研究 | Research Reference |
-| 4 | [`guides/keenable_search_cluster_guide.md`](./guides/keenable_search_cluster_guide.md) | Keenable 搜索、认证、集群部署、限速和安全操作 | Operational Guide |
-| 5 | [`research/gdp_pdf_benchmark_analysis.en.md`](./research/gdp_pdf_benchmark_analysis.en.md) | Benchmark 分析英文版本 | Translation |
+| 4 | [`research/local_multimodal_generator_shortlist_2026-09.md`](./research/local_multimodal_generator_shortlist_2026-09.md) | 最新本地多模态 generator 候选、成本风险和 bake-off 方案 | Research Reference |
+| 5 | [`guides/keenable_search_cluster_guide.md`](./guides/keenable_search_cluster_guide.md) | Keenable 搜索、认证、集群部署、限速和安全操作 | Operational Guide |
+| 6 | [`research/gdp_pdf_benchmark_analysis.en.md`](./research/gdp_pdf_benchmark_analysis.en.md) | Benchmark 分析英文版本 | Translation |
 
 发生冲突时按下列优先级处理：
 
@@ -50,4 +52,10 @@ Initial Pipeline 总计划
 
 ## 下一步
 
-代码已具备 V0 骨架。下一步从总计划的“当前待实现的最小 Backlog”继续：将主文本 extractor 迁移到 LiteParse 2.5.0，增加 `text_only` / `multimodal` target input profile、动态 512K 上下文预算和生成前 document view 构建，再让 generator、verifier、训练与评测统一消费这套输入。
+代码已完成第一批 V0.2 输入迁移：LiteParse 2.5.0、`text_only` / `multimodal`
+target input profile、动态 512K 预算、生成前 document view，以及 generator/verifier 的统一
+input package 已接入。本地 verifier 现支持 Qwen 262K→512K 的预算路由、32K 长上下文输出
+预留、finish/content 完整性检查和一次受限重试；gold audit 已支持 sidecar evidence-page
+聚焦，同时 blind difficulty 阶段仍保持完整无 hint 输入。目标 25 万词表 tokenizer 已接入，
+V1 完整文档文本使用精确 token 统计；视觉 token 仍等待目标看图模块的 processor 冻结。下一步是
+完成人工签核，并用 Golden V0 校准难度阈值和抽检比例。

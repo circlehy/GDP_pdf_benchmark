@@ -1,0 +1,36 @@
+{
+  "document_id": "sha256:9d392eb460a927dff295dda3d11f2a3042eba3b5a85e6b518be6e231fd5f99ef",
+  "generator": "deterministic_liteparse_block_match_v0",
+  "mutation_applied": false,
+  "sample_id": "pdfsft_9a597827e4a0a78b89e2",
+  "schema_version": "0.1",
+  "suggestions": [
+    {
+      "alignment_status": "misaligned",
+      "confidence": "high",
+      "matched_block_ids": [
+        "p3_b26",
+        "p3_b27",
+        "p3_b28"
+      ],
+      "node_id": "e2",
+      "original_bbox": {
+        "x0": 0.15,
+        "x1": 0.85,
+        "y0": 0.48,
+        "y1": 0.57
+      },
+      "original_token_coverage": 0.0769,
+      "page_number": 3,
+      "reason": "Suggested bbox is the union of the highest-scoring contiguous LiteParse block window. Human acceptance is required before mutation.",
+      "score": 0.8646,
+      "suggested_bbox": {
+        "x0": 0.24843310688333897,
+        "x1": 0.8111258773766971,
+        "y0": 0.4396833282764062,
+        "y1": 0.850327310571757
+      },
+      "suggested_token_coverage": 0.9231
+    }
+  ]
+}

@@ -28,7 +28,7 @@ V0.2 冻结以下目标模型输入决策：
 - 原始 PDF 是数据源和审计资产，不是本地模型直接消费的 tensor；
 - 完整文本统一由固定版本 `LiteParse 2.5.0` 生成，开启英文 OCR；
 - 页面视觉输入是按页码排列的**完整页面渲染图**，不是由 evidence graph 选择的图表裁剪；
-- 支持 `text_only` 与 `multimodal` 两种目标输入 profile；
+- 支持 `text_only` 与 `multimodal` 两种目标输入 profile，pipeline 默认使用 `multimodal`；
 - 默认以完整 PDF 为训练文档；`text_only` 输入为问题和文档视图内每一页的完整提取文本；
 - `multimodal` 输入为文档视图内全部完整页面图像、问题和相同页面的完整提取文本；
 - generator、verifier、difficulty solver、训练和评测应看到同一种 target-visible input package；
@@ -92,6 +92,8 @@ multimodal
 Canonical 资产始终是一页一图。只有模型接口存在硬性图片数量限制时，delivery adapter 才可以像 AA 一样把 2–4 个**完整页面**合成带清晰页码的 composite image；这不是图表裁剪，也不得遗漏后续页面。默认本地训练使用 `single_page`，避免无必要地降低小字、图表和工程图细节。
 
 `training_document_view` 默认覆盖完整 PDF。只有完整输入无法在动态上下文预算内安全容纳时，才从原 PDF 派生 `scope=bounded` 的视图。该视图必须先冻结，再生成问题、gold 和 evidence graph；因此不存在“已经生成了依赖后续页面的问题，再把后续页面截掉”的情况。
+
+这里对“最终数据里的文档是完整文档”作如下精确定义：`scope=full_pdf` 时保存并输入完整原 PDF；`scope=bounded` 时，最终样本保存并输入完整、不可再裁剪的 document view，同时在 provenance 中明确它来自原 PDF 的哪些页，不能把 bounded view 伪装成完整原 PDF。
 
 同一道 task 可以声明一个或多个 `supported_input_profiles`：
 
@@ -451,6 +453,11 @@ Canonical IR 每个页面至少保存：
 
 ### 6.3 本地 served 模型选择
 
+2026-09 最新候选与部署成本分析见
+[`local_multimodal_generator_shortlist_2026-09.md`](../research/local_multimodal_generator_shortlist_2026-09.md)。
+shortlist 只作为部署前记录；2026-09-17 已实际部署并对比 Qwen3.8-27B 与
+GLM-5.3-Flash，当前 production 候选以本节实测结果为准。
+
 不先凭榜单固定模型。用同一批 30–50 个已人工确认任务做 bake-off：
 
 - 是否支持多图、长上下文和目标分辨率；
@@ -460,9 +467,197 @@ Canonical IR 每个页面至少保存：
 - 吞吐、显存、并发和失败恢复；
 - vLLM/SGLang 兼容性。
 
-选择一个较强模型作为 verifier/difficulty solver，一个与最终训练目标最接近的 checkpoint 作为 target base。二者可以相同，但日志必须区分角色。
+选择一个较强模型作为 verifier/difficulty solver，一个与最终训练目标最接近的 checkpoint
+作为 target base。用于 gold 正确性验证时，generator 与 independent verifier 必须来自不同
+模型家族；target-base 难度试答可以与其中一个家族相同，但日志必须区分角色。
 
-纯文本 run 的 generator/verifier 不能接收页面图像；否则可能生成只能从视觉信息回答的问题。多模态 run 接收全部完整页面图像与完整提取文本，不接收 evidence-only 图片包。OpenAI 的 `input_file` 原生 PDF 模式可以用于少量对照，判断显式 LiteParse 路径是否损失信息，但其输出不得直接进入标准难度比较或替代 target-visible 验证。
+#### 6.3.1 2026-09-17 本地模型实测
+
+部署配置：
+
+| 模型 | vLLM 配置 | 上下文 | 备注 |
+|---|---|---:|---|
+| Qwen3.8-27B | 8×H200、TP=8、BF16 权重、FP8 KV cache | 262,144 | 支持 `xhigh/medium/low`；完整页面图像与 LiteParse 全文输入正常 |
+| GLM-5.3-Flash | 8×H200、TP=8、FP8 权重、MTP=5 | 1,048,576 | 支持 `max/high/medium/low`；1M KV cache 初始化成功 |
+
+两者均通过健康检查、短文本推理、单页视觉识别和严格 JSON Schema 输出。GLM 冷启动约
+22 分钟；服务常驻后不影响单次请求。GLM 的 MTP draft 不接收多模态 embedding，这只会
+影响图片请求的 speculative decoding 收益，不改变主模型看到的多模态输入。
+
+同一份 23 页完整多模态 GDP-like 解题测试表明：
+
+| 配置 | 实际输入 token | 输出 token | 耗时 | 结果 |
+|---|---:|---:|---:|---|
+| Qwen `medium + 8K` | 74,427 | 5,311 | 44.9 s | 有 final，但误读关键图例编号，不可单独生成 gold |
+| Qwen `xhigh + 8K` | 74,462 | 8,192 | 69.8 s | reasoning 用尽预算，无 final |
+| Qwen `xhigh + 16K` | 74,469 | 14,352 | 112.7 s | 有 final，关键图例 5/6 正确，细图读数仍需核验 |
+| GLM `high + 16K` | 88,095 | 16,142 | 77.6 s | 有 final，筛选结论正确，但将关键图点读得过于接近带边 |
+| GLM `max + 16K` | 88,095 | 16,384 | 85.2 s | reasoning 用尽预算，无 final |
+| GLM `max + 32K` | 88,095 | 32,768 | 144.7 s | 仍无 final，不适合作为批量默认配置 |
+
+将 Figure 15 单页作为聚焦证据再测时，GLM `high` 能正确识别 Lowe/Ohman 为方框 5/6，
+并将 Lowe 最低点读为约 0.42±0.01。这说明长文档错误不只是视觉能力不足，也包含证据
+定位被完整文档稀释的问题。正确性 verifier 可以在保留完整 input package 的同时使用
+sidecar evidence page/crop 做定向复核；标准 difficulty solver 仍必须使用无 hint 的完整输入。
+
+真实 generator prompt 要求一次生成 3 个 task、gold、claims、derivations、evidence graph
+和 rubric。初始 prompt 下，Qwen 与 GLM 都出现了 `final_output`、claim 或 derivation 引用不
+闭合。加入精确 ID 规则和返回前 self-check 后，结果如下：
+
+| 配置和文档 | 实际 prompt token | completion token | 耗时 | 结构结果 |
+|---|---:|---:|---:|---|
+| Qwen `xhigh + 24K`，23 页 | 约 75K | 24,576 | 约 194 s | 截断 JSON，无可用 batch |
+| Qwen `xhigh + 32K`，23 页 | 75,198 | 29,533 | 232.7 s | schema 3/3；static gate 0/3，含 lookup-only 和 rubric 缺项 |
+| GLM `high + 24K`，23 页 | 88,784 | 13,616 | 60.9 s | schema 3/3；本轮未保存完整 batch 做正式独立验证 |
+| GLM `high + 24K`，88 页 | 283,074 | 15,599 | 92.3 s | self-check 后 static gate 2/3；余下一条为 derivation/rubric 引用错误 |
+| GLM `high + 24K`，99 页 | 320,882 | 12,583 | 108.0 s | schema 3/3、static gate 3/3 |
+| GLM `medium + 16K`，23 页 | 88,609 | 16,384 | 99.7 s | reasoning 用尽预算，无 final |
+| GLM 正式 run config，23 页 | 88,964 | 14,414 | — | schema/static 3/3，但三题均偏向 text reasoning |
+
+当前冻结建议：
+
+- 默认本地 generator：GLM-5.3-Flash，`reasoning_effort=high`，
+  `max_output_tokens=24576`，`temperature=0.1`，`top_p=0.95`；
+- Qwen3.8-27B 不作为三候选全量 generator；保留 `xhigh` 用于聚焦视觉复核、困难样本
+  抽查和异构模型交叉验证；
+- 正确性验证固定使用交叉家族路由：GLM 生成由 Qwen 验证，Qwen 生成由 GLM 验证；
+  同一模型家族自验记为 `needs_review`，不得进入 difficulty gate；
+- 对应可执行配置为 `configs/runs/local_glm_generate_qwen_verify.yaml` 和
+  `configs/runs/local_qwen_generate_glm_verify.yaml`。服务地址只从被 gitignore 的本地环境文件
+  读取，运行日志记录实际模型名、reasoning、输出预算和采样参数；
+- 模型服务窗口与未来 target 的 512K 窗口分别核算。Qwen verifier 为 262K，因此只能复核
+  估算后适配其窗口的完整 package；当前 88/99 页 package 粗估约 287K/326K，不得为了让
+  Qwen 接收而临时裁页。Qwen→GLM 可覆盖 Qwen 自己能够生成的输入，GLM→Qwen 的长文档则
+  停在 `needs_review`，等待另一异构长上下文 verifier；
+- GLM `max`、GLM `medium + 16K` 和 Qwen `xhigh + 24K` 不进入默认生成配置；
+- static gate 是强制准入门，不合格 JSON 不进入 verifier；纯引用闭合错误允许一次
+  deterministic repair 或带错误信息的结构修复，lookup-only、关键证据断链和缺少控制条件
+  的任务直接拒绝或重生成；
+- 本轮通过 schema/static gate 只证明格式和结构达到最低要求，不证明 gold 正确，也不证明
+  难度已达到 GDP.pdf。所有候选仍需完成独立答案重建、数值复算、claim–evidence 核验、
+  bbox/页码检查和人工抽检。
+
+交叉模型验证降低 generator 自我确认和同系列错误相关性，但不等于 ground truth：两种模型
+仍可能共同误读模糊图表或接受同一个错误前提。因此 cross-model agreement 只是正确性准入的
+一层，不能替代确定性计算器、证据坐标/摘录检查，以及 Golden 阶段的人工抽检。
+
+同一正式 run config 的首条端到端交叉验证中，Qwen 对 GLM 候选的 blind reconstruction
+使用 74,698 prompt / 5,194 completion tokens，gold audit 使用 76,599 prompt / 2,085
+completion tokens，最终状态为 `passed`。但人工复看仍发现：候选把“Group 1–4 数据不超过
+M=0.95”进一步写成“在 M=0.95 没有可靠数据”，这一边界推论并非原句直接蕴含，Qwen audit
+没有提出异议。因此 `independent_verifier_status=passed` 后仍保持
+`eligible_for_difficulty=false`，直到计算、evidence location 和人工抽检等后续 gate 全部完成。
+
+本轮还观察到候选偏向 `text_reasoning`。40% visual-spatial、45% structured-layout、15%
+text-reasoning 的总体配比不能只依赖模型自由采样；generator 调用应显式指定本次所需任务
+类型或按类型分队列生成，再由全局调度器控制近似分布。
+
+纯文本 run 的 generator/verifier 不能接收页面图像；否则可能生成只能从视觉信息回答的问题。多模态 run 接收冻结 document view 的全部完整页面图像与相同页面的完整提取文本，不接收 evidence-only 图片包。OpenAI 的 `input_file` 原生 PDF 模式可以用于少量对照，判断显式 LiteParse 路径是否损失信息，但其输出不得直接进入标准难度比较或替代 target-visible 验证。
+
+#### 6.3.2 2026-09-17 Qwen 512K 扩窗服务 checkpoint
+
+本轮在单节点 8×H200、TP=8 上启动第二个 Qwen3.8-27B 服务，保留原生 262K 服务作为
+对照。扩窗服务使用静态 YaRN `factor=2.0`、FP8 KV cache、`max_model_len=524288`，served
+model name 为 `Qwen3.8-27B-512K`。启动日志确认配置实际生效：KV cache 共约
+14,972,111 tokens，满 524,288-token 请求的理论最大并发约 28.56；`/v1/models`、短文本
+`xhigh` 推理和严格 JSON Schema 均通过。首次启动的 profile/compile/warmup 约 14 分钟，
+其中 FlashInfer kernel 首次编译是主要耗时；服务启动后未观察到 OOM 或 engine error。
+
+真实完整多模态 package 测试结果：
+
+| 测试 | 实际 prompt token | completion token | 墙钟时间 | 结果 |
+|---|---:|---:|---:|---|
+| 23 页，512K 首轮，`xhigh + 16K` | 74,698 | 3,039 | 33.6 s | Schema 合法、定位正确，但 `reconstructed_answer` 只写引言，漏答全部子问 |
+| 23 页，512K 复测，`xhigh + 16K` | 74,698 | 6,375 | 84.4 s* | 完整回答且与 262K baseline 一致；首轮异常不是稳定失败 |
+| 88 页，512K，`xhigh + 16K` | 228,818 | 6,251 | 98.8 s | 完整回答，电池配置、尺寸、质量和超限量均与 gold 一致 |
+| 99 页，512K 首轮，`xhigh + 16K` | 261,147 | 16,384 | — | HTTP 200、无服务错误，但以 `length` 结束，hidden reasoning 用尽预算，无结构化 final |
+| 99 页，512K 复测，`xhigh + 32K` | 261,147 | 9,967 | 120.9 s | 正常返回结构化 final，但关键 Figure 18 读数与 gold 冲突，不能通过正确性 gate |
+
+`*` 23 页复测与 99 页首轮并发执行，不能用于单请求吞吐比较。262K baseline 的同一 23 页
+任务为 74,698 prompt / 5,194 completion tokens，并正确完成；因此当前没有证据表明静态 YaRN
+在短上下文上稳定回退，但单次漏答说明仍需覆盖性检查和有限重试。
+
+99 页任务虽然 prompt 本身比 262,144 少 997 tokens，但 `261,147 + 16,384` 已超过原生
+服务的总上下文限制；使用 32K 输出预算时总请求为 293,915-token budget。因此它是一个真实
+需要扩窗 verifier 的 pipeline 场景，而不是把未来 target 的 512K 窗口误当成生成模型窗口。
+
+99 页 32K 复测的结构和服务状态正常，但答案将 Figure 18 的 1-year/10-year 选择读成约
+40/240 mil，并将前一失败点读成 20/220 mil；现有 gold 为 150/250 mil，前一失败点为
+125/200 mil。该差异必须回到原图人工核验，当前应判为关键视觉读数失败，不能因为请求成功、
+`input_complete=true` 或 JSON 合法就接受。它也再次证明：长上下文可运行不等于长文档视觉
+答案可靠。
+
+人工查看 150 DPI PDF page 64 后确认 gold 正确：diamond 的相邻点约为 125 mil/0.48 与
+150 mil/0.15，triangle 的相邻点约为 200 mil/0.64 与 250 mil/0.14。随后只提供 Figure 18
+完整页面进行聚焦复核，Qwen 512K `xhigh + 16K` 使用 2,263 prompt / 6,343 completion
+tokens、40.7 秒，正确读出上述四个点。这说明主要问题是长文档证据定位/注意力稀释，而不是
+模型完全不会读取该图；完整 package 无 hint 仍用于 difficulty，sidecar evidence page/crop
+可用于独立的 gold correctness audit，但后者的成功不能改写前者的难度结果。
+
+据此冻结的下一步配置建议：
+
+- 保留原生 262K 与 512K 两个服务；当前先按安全侧的
+  `provisional_input + max_output_tokens` 路由，接入真实 tokenizer/vision processor 后改为
+  `actual_prompt + max_output_tokens`，而不是全部请求切到静态 YaRN 服务；
+- 适配原生窗口的 verifier 默认继续使用 262K 服务；只有完整 package 加输出预算超出原生
+  窗口时才路由到 512K；
+- 超长 `xhigh` 请求默认预留 32K 输出；16K 的 `length/no final` 属于服务/预算失败，不计为
+  模型解题失败；若 32K 仍持续只消耗 reasoning，再比较 `high + 16K/24K`，不无限加预算；
+- 增加 response `finish_reason`、原始 reasoning/content token、空 content 和子问覆盖率检查；
+  空 final 或漏答自动进入一次受限重试，仍失败则 `needs_review`；
+- `input_complete` 只表示模型自报，不能替代 rubric coverage、数值复算和 evidence-page/crop
+  定向视觉复核；99 页 Figure 18 样本保留为扩窗视觉回归用例。
+
+可恢复状态：本轮所有推理请求均已结束，两个 Qwen 服务可以继续独立使用；下一次从
+“人工复核 Figure 18 原图 → 为 512K 服务建立隔离 run config → 实现动态路由与 finish/coverage
+gate”继续，无需重跑上述请求。
+
+实现状态（同日续跑）：上述三项已经完成。`local_glm_generate_qwen_verify.yaml` 现在按完整
+请求预算优先选择原生 262K verifier，超出后选择 512K/32K；
+`local_glm_generate_qwen512_verify.yaml` 提供不覆盖原 run 的强制 512K A/B 配置。client 日志
+记录 `finish_reason`、reasoning/content 字符数；blind reconstruction 对非 `stop`、空/过短
+final 和显式分问漏答最多重试一次，仍失败则 `needs_review`。当前 provisional accounting 的
+路由结果为：23 页→262K/16K，88/99 页→512K/32K。真实 CLI 集成 smoke 对第一条 23 页
+候选自动选择 `Qwen3.8-27B` 原生服务；reconstruction 使用 74,741 prompt / 3,605 completion，
+audit 使用 76,169 prompt / 1,781 completion，二者均为 `finish_reason=stop`，完整性 gate 与
+gold audit 通过，最终状态为 `passed`，另外两条候选保持 `not_run`。代码检查为 Ruff clean、
+27 tests passed。
+
+Evidence-focused correctness audit 随后接入：blind reconstruction 的输入协议不变，仍为完整
+23 页图像与完整文本；audit 才读取候选 sidecar evidence graph，将其节点、bbox、role、excerpt
+作为“待核验定位”放入 prompt，并只附加对应的完整证据页。Audit prompt 明确禁止把 graph 当作
+ground truth，定位错误、证据不足或与完整文本冲突时必须 dispute/转人工；完整 LiteParse 文本
+默认继续提供，`text_only` audit 仍禁止图片输入。首条真实 CLI smoke 的 reconstruction 使用
+74,741 prompt tokens；focused audit 只附加 PDF pages 8、10，使用 34,259 prompt / 2,800
+completion tokens，核验 `e1–e5` 和 `c1–c5` 后状态为 `passed`。日志保存 audit scope、完整文档
+页数、附加页码、DPI 和 evidence node IDs。
+
+随后增加 bbox crop 与确定性坐标门禁。每个 evidence node 从 150 DPI 原始页面按标准化 bbox
+裁剪，默认增加 10% padding 且短边至少 256 px；audit 同时接收对应完整页和 crop，并在 prompt
+manifest/日志中记录附件顺序、页码、node ID、原始/扩展 bbox、像素尺寸和对齐结果。Crop 是定位
+辅助而不是独立事实源，blind reconstruction 与 difficulty solver 的完整无 hint 输入保持不变。
+
+坐标门禁分别计算 excerpt 对整页 LiteParse 文本与 bbox 相交 blocks 的 token coverage。若整页
+coverage 足以证明摘录可见，而 bbox coverage 低于相对阈值，则标为 `misaligned`；无 excerpt 或
+视觉/OCR-only 证据标为 `not_checkable_*`，不会被错误判成已对齐。任何 `misaligned`/`missing_page`
+节点都会强制最终状态为 `needs_review`，即使 VLM 能依赖完整页或完整文本支持 gold。真实首条样本
+复测中，Qwen audit 仍给出 `gold_supported=true`、无 disputed claims，但确定性检查发现 `e1`
+（page coverage 1.0000 / bbox 0.2857）和 `e5`（0.9167 / 0.0833）错位，最终正确降为
+`needs_review`；`e2–e4` 对齐。测试现为 Ruff clean、30 tests passed。
+
+Bbox repair review 随后完成。对每个 `misaligned` 节点，pipeline 在同页 reading-order blocks 中
+枚举最多 6 个连续 block 的窗口，以 excerpt token coverage 为主、precision 和窗口长度为辅进行
+确定性排序；只有 coverage 与相对原框的 improvement 同时达到阈值才给出 replacement proposal。
+建议记录 original/suggested bbox、两侧 coverage、score、confidence 和 matched block IDs，但不
+修改候选。`review-pack` 为每条建议保存完整页、原始 crop、建议 crop、依赖 claims、机器可读
+`bbox_repair_suggestions.json` 和初始为 `pending` 的 `bbox_repair_decisions.json`；重复生成不会覆盖
+已经存在的人工决定文件。
+
+首条真实样本生成两条 high-confidence 建议：`e1` 从 0.2857 提升到 0.8571，定位到
+`p8_b23–p8_b27`；`e5` 从 0.0833 提升到 0.8333，定位到 `p10_b3–p10_b7`。人工视觉查看新旧
+crop 后确认新框包含对应 Mdd 与 low-supersonic/Eqn. 6 语句，旧框没有。当前仍保持
+`mutation_applied=false` 和 verifier `needs_review`；只有 reviewer 接受 decision 后，后续 apply
+stage 才能创建修正版 sidecar。测试现为 Ruff clean、31 tests passed。
 
 ### 6.4 从 Golden 到规模化的调用变化
 
@@ -876,7 +1071,7 @@ rubric_count
 - 抽样对比页面图像与 LiteParse 文本，记录 parser、OCR 和 renderer 版本；
 - 检查页数一致、空页、OCR 异常、字符乱码和页面渲染失败。
 
-V0 不要求完美重建文档。`multimodal` 模型始终可以看到完整页面图像；`text_only` 模型只能看到 LiteParse 完整文本，因此 text-only task 必须额外通过“答案可由提取文本支持”的可见性 gate。
+V0 不要求完美重建文档。`multimodal` 模型始终可以看到冻结 document view 内每一页的完整页面图像；`text_only` 模型只能看到相同 view 的 LiteParse 完整文本，因此 text-only task 必须额外通过“答案可由提取文本支持”的可见性 gate。
 
 ### Stage 4：Build Document View and Input
 
@@ -947,7 +1142,7 @@ V0 为了输入一致性，OpenAI generator 接收显式页面图片与 LitePars
 5. evidence graph 结构校验；
 6. claim–evidence coverage；
 7. 程序重算；
-8. independent verifier 在相同 target-visible package 上重建；
+8. 不同模型家族的 independent verifier 在相同 target-visible package 上盲重建；
 9. rubric 原子性与单元测试；
 10. prompt 答案泄露检查；
 11. 重复/污染检查；
@@ -1319,6 +1514,117 @@ total_sequence_tokens
 10. 用现有 3 份 PDF 重新跑 dual-profile Smoke Test；
 11. 人工比较旧 raw-PDF generator 与新显式输入链路，修复答案、可见性和难度差异；
 12. 扩到 Golden V0，随后冻结 Training Pilot 配置并做对照训练。
+
+### 20.1 2026-09-17 实施快照
+
+- 已完成：精确 pin `liteparse==2.5.0`、English OCR、本地 tessdata cache、150 DPI
+  PyMuPDF 整页渲染和逐页 canonical text IR；
+- 已完成：配置/schema 中的 target input profile、document view、动态 context budget；目标
+  25 万词表 tokenizer 已接入，文档文本改为精确计数，视觉 token 暂保留显式 provisional 计数；
+- 已完成：`build-input` stage，支持 full PDF、显式 bounded page ranges、150→120→96→72
+  DPI fallback，超预算时拒绝静默尾部截断；
+- 已完成：generator 从 raw PDF `input_file` 迁移到显式 LiteParse 文本与整页图像，verifier
+  复用相同 frozen input package；
+- 已验证：现有 3 份 NASA PDF 共 210 页完成重新解析，并各自生成 text-only 与 multimodal
+  输入包；
+- 已完成：Qwen3.8-27B 与 GLM-5.3-Flash 本地服务 bake-off；当前默认本地 generator 候选
+  冻结为 GLM `high + 24K`，Qwen `xhigh` 保留为聚焦视觉 verifier/difficulty solver；
+- 已完成：本地 chat 请求正式传递 `reasoning_effort`、`temperature`、`top_p` 和输出预算；
+  加入 GLM→Qwen、Qwen→GLM 两套隔离输出的 run config、模型家族独立性 gate、各服务自身
+  context-window 预检和 verifier 模型溯源；
+- 已完成：generator prompt 增加 evidence graph 精确 ID、claim/derivation/rubric 引用闭合和
+  返回前 self-check；88 页三候选 batch 的 static 通过率由 0/3 提升到 2/3；
+- 已完成：23 页完整 package 的本地端到端 smoke；GLM 生成 3 条并 static 3/3，Qwen 对其中
+  1 条完成 blind reconstruction + gold audit 并通过。结果同时暴露了 task-type quota 和
+  模型共同接受边界过推的问题，尚不能导出训练；
+- 已确认：实验 batch 尚不能当作最终 SFT 数据；99 页 batch 虽 static 3/3，仍未完成独立
+  gold reconstruction、确定性计算复核、bbox/摘录核验和人工审核；
+- 已完成：correctness audit 的 evidence-page + bbox-crop 附件、附件 manifest、excerpt/bbox
+  token 对齐门禁和日志；真实样本检出 `e1/e5` 错位并从模型审计的通过结果降为 `needs_review`；
+- 已完成：非破坏性 bbox repair suggestion、旧/新 crop 对照和机器可读人工 decision 模板；真实
+  `e1/e5` 建议均为 high confidence，但尚未接受或应用；
+- 已完成：接入目标文本 tokenizer
+  `/mnt/weka/shrd/k2m/mikhail.yurochkin/ilikejson-250k-tokenizer`，记录 tokenizer JSON 的
+  SHA-256 指纹；待视觉模块冻结后再接入其真实 vision processor；
+- 已完成：一次性结构修复重试、run-level task-type quota、prompt 内容 hash 和 V2 sample ID；
+- 已完成：人工 bbox decision apply、final gate、受限算术 calculator、人工 omitted-page/视觉/rubric
+  checklist、difficulty、export、report，以及隔离三文档 V1 smoke；
+- 待完成（不阻塞 initial pipeline 代码闭环）：接入目标模型真实 vision processor 和最终 chat
+  template、完成当前 V1 样本的人工签核，并用更大 Golden V0 校准 predicted difficulty 阈值和
+  人工抽检比例。
+
+### 20.2 Initial Pipeline V1 实测闭环
+
+2026-09-17 后续实现已补齐以下可执行 stage：
+
+```text
+apply-bbox-repairs → model-verify(repaired) → finalize
+→ difficulty-gate(predicted|judged) → export → report
+```
+
+- Bbox decision 必须为 `accepted`、具有非空 reviewer，且原 bbox 必须与 suggestion 中的旧值完全
+  一致；否则拒绝 stale/无归属修复。修复写新 `repaired.jsonl`，不覆盖 verified，并清空旧模型
+  验证状态，要求重新验证；
+- `finalize` 统一检查来源授权和 benchmark denylist、frozen input package/context、full/bounded
+  view、cross-model gold、bbox、受限算术复算、rubric 结构/负例、人工 checklist。未知项为
+  `needs_review`，来源/计算矛盾、坏 rubric、verifier 否定或人工拒绝才为 `failed`；
+- `difficulty-gate` 的 predicted 模式用于规模化预筛；judged 模式只把完整输入下的实质性 solver
+  推理失败算作 verified hard，服务/格式/截断失败不计；
+- `export` 分离 hint-free training conversation 与 audit sidecar，按 document hash 做 group split，
+  严格模式拒绝未验证难度；允许 predicted 的 pilot export 永远不是 release-ready；
+- `report` 汇总 task-type 分布、static 原因、verifier、repair、final、difficulty 和 export 漏斗。
+
+生成侧同时补齐一次性结构修复和 run-level 类型配额。结构修复只处理 Pydantic/引用闭合错误，
+最多一次且保留 raw/log；语义错误不自动改写。40/45/15 权重通过最大余数配额和确定性交错序列
+分配到整个 run，再把每个 candidate index 的 required type 作为硬约束传入模型。Prompt 版本升级
+为 `generator_v2+sha256:<digest>`，避免修改 prompt 后沿用旧 sample ID。
+
+隔离 `initial_pipeline_v1` 对三份现有 PDF 各生成一条，精确得到 1 visual-spatial、1
+structured-layout、1 text-reasoning。新版 static gate 新增 `has_primary_intent` 和
+`rubric_covers_all_gold_claims`：视觉题因 lookup-only 被拒，文本题因 rubric 漏两条 claim 被拒，
+仅 88 页跨 Table 3-1/Table 5-4 的结构任务通过。该任务由 Qwen3.8-27B-512K 用完整 88 页 blind
+重建，再以 pages 18/56 focused audit；gold、5 个 claims 和 3 个 bbox 均通过，0 repair。最终
+状态为 `needs_review`，只剩非算术筛选推导、rubric negative cases 和 human review checklist。
+
+当前真实漏斗为 3 generated → 1 static accepted → 1 independent verifier passed → 1 final
+needs-review → 0 difficulty → 0 export。该 0 导出是正确的安全结果，不是 pipeline 故障；人工审核
+完成前不得伪造 release-ready。代码检查为 Ruff clean、39 tests passed。
+
+### 20.3 目标 tokenizer 接入结果
+
+V1 配置已冻结目标文本 tokenizer，并将 input package 放入 run 隔离目录。`build-input` 直接使用
+`tokenizer.json` 统计完整逐页 LiteParse 文本，不添加 tokenizer 中不存在的 chat template；记录
+`hf-fast:ilikejson-250k-tokenizer:sha256:7e4c364927e79537` 作为计数器身份。三份完整文档的结果为：
+
+| 文档页数 | 精确文本 tokens | 视觉 tokens（估算） | 含 question/system 预留的输入估算 | 512K 利用率 |
+|---:|---:|---:|---:|---:|
+| 99 | 49,162 | 249,926 | 305,232 | 58.2% |
+| 88 | 41,596 | 221,430 | 269,170 | 51.3% |
+| 23 | 24,994 | 57,518 | 88,656 | 16.9% |
+
+旧的 `chars/3.5` 对三份文本分别估算为 70,110、59,610、33,165 tokens；新计数合计
+115,752，而旧估算合计 162,885，旧口径高估约 28.9%。这不会放松窗口硬门禁：当前
+`exact=false`、`text_tokens_exact=true`、`image_tokens_exact=false`，因为视觉编码、system/chat
+分隔符和最终序列化模板尚未冻结。训练 export 会对问题、完整文档文本和 gold answer 再做一次
+文本精确计数，但整条多模态序列在 vision processor 接入前仍明确标为估算。
+
+### 20.4 V1 人工签核与难度结果
+
+人工 reviewer `yuan.huang` 已确认 88 页结构任务的问题无歧义、gold 正确、五条筛选/求交推导
+成立，并完成 rubric 负例审阅。为保留不可变生成记录，三项修订作为
+`sample_review_decision.json` 中的审计 override，由 `finalize` 应用到新 artifact：
+
+1. `r2` 只强制题目明确要求的四个标称电压，不强制复述全部筛选字段；若主动写出筛选数值则
+   仍须准确；
+2. `r5` 的脚注要求由 minor 改为 major，因为这是问题明确要求的输出；
+3. `r6` 删除重复的脚注处罚，只拦截把近似但不合格的体系加入最终集合。
+
+`finalize` 结果为 1 passed、0 failed、0 needs-review，并记录三条
+`AppliedRubricOverride`（原值、新值、原因、reviewer、decision artifact 和时间）。predicted
+difficulty 随后给出 `0.6333 / medium`，低于 `hard >= 0.65` 门槛；而且独立 Qwen 已完整正确解出
+该题，因此无需再为这条样本调用付费 judge。它是正确、可用的中等难度样本，但不会混入当前
+只收 hard 的 release export。最新漏斗为 3 generated → 1 static accepted → 1 final passed →
+1 difficulty assessed → 0 hard admitted → 0 exported。
 
 ## 21. Source of Truth 与参考文档
 

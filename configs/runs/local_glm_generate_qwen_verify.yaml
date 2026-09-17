@@ -1,0 +1,48 @@
+extends: "configs/default.yaml"
+run_id: "local_glm_generate_qwen_verify_v0"
+source_manifest: "configs/sources/smoke_nasa.yaml"
+secrets_file: "configs/local/secrets.env"
+
+paths:
+  generated: "data/runs/local_glm_generate_qwen_verify/generated.jsonl"
+  verified: "data/runs/local_glm_generate_qwen_verify/verified.jsonl"
+  repaired: "data/runs/local_glm_generate_qwen_verify/repaired.jsonl"
+  finalized: "data/runs/local_glm_generate_qwen_verify/finalized.jsonl"
+  rejected: "data/runs/local_glm_generate_qwen_verify/rejected.jsonl"
+  hard: "data/runs/local_glm_generate_qwen_verify/hard.jsonl"
+  exports: "data/runs/local_glm_generate_qwen_verify/exports"
+
+models:
+  generator:
+    provider: "openai_compatible_chat"
+    model: "zai-org/GLM-5.3-Flash"
+    base_url: null
+    base_url_env: "GLM_VLM_BASE_URL"
+    api_key_env: "LOCAL_VLM_API_KEY"
+    reasoning_effort: "high"
+    context_window_tokens: 1048576
+    max_output_tokens: 24576
+    temperature: 0.1
+    top_p: 0.95
+  verifier:
+    provider: "openai_compatible_chat"
+    model: "Qwen3.8-27B"
+    base_url: null
+    base_url_env: "QWEN_VLM_BASE_URL"
+    api_key_env: "LOCAL_VLM_API_KEY"
+    reasoning_effort: "xhigh"
+    context_window_tokens: 262144
+    max_output_tokens: 16384
+    temperature: 0.1
+    top_p: 0.95
+  verifier_long_context:
+    provider: "openai_compatible_chat"
+    model: "Qwen3.8-27B-512K"
+    base_url: null
+    base_url_env: "QWEN_VLM_512K_BASE_URL"
+    api_key_env: "LOCAL_VLM_API_KEY"
+    reasoning_effort: "xhigh"
+    context_window_tokens: 524288
+    max_output_tokens: 32768
+    temperature: 0.1
+    top_p: 0.95
