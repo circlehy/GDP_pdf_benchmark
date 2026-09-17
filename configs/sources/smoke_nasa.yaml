@@ -1,0 +1,47 @@
+schema_version: "0.1"
+source_id: "nasa_ntrs_smoke_v0"
+description: >-
+  Three NASA NTRS reports selected for the first internal pipeline smoke test.
+  Each NTRS record states Distribution Limits: Public and Copyright: Work of
+  the US Gov. Public Use Permitted. This approval covers the internal smoke
+  run; release review must be repeated before any training-data publication.
+documents:
+  - source_url: "https://ntrs.nasa.gov/api/citations/19880002254/downloads/19880002254.pdf"
+    title: "A Critical Assessment of Wind Tunnel Results for the NACA 0012 Airfoil"
+    publisher: "NASA Ames Research Center"
+    license_status: "approved"
+    license_id: "US-GOV-WORK-PUBLIC-USE-PERMITTED"
+    license_evidence_url: "https://ntrs.nasa.gov/citations/19880002254"
+    third_party_material_status: "screened_no_explicit_restrictions"
+    review_notes: >-
+      NTRS metadata marks the 23-page technical memorandum Public and Work of
+      the US Gov., Public Use Permitted. Title pages and extracted text showed
+      no copyright, permission, or trademark notice. Selected for multi-chart,
+      cross-experiment comparison and summary-table tasks.
+
+  - source_url: "https://ntrs.nasa.gov/api/citations/19950010146/downloads/19950010146.pdf"
+    title: "Primary Battery Design and Safety Guidelines Handbook"
+    publisher: "NASA Johnson Space Center"
+    license_status: "approved"
+    license_id: "US-GOV-WORK-PUBLIC-USE-PERMITTED"
+    license_evidence_url: "https://ntrs.nasa.gov/citations/19950010146"
+    third_party_material_status: "screened_no_explicit_restrictions"
+    review_notes: >-
+      NTRS metadata marks the 88-page NASA reference publication Public and
+      Work of the US Gov., Public Use Permitted. Title pages and extracted text
+      showed no copyright, permission, or trademark notice. Selected for
+      cross-table safety constraints, diagrams, exceptions and calculations.
+
+  - source_url: "https://ntrs.nasa.gov/api/citations/20230004376/downloads/20230004376.pdf"
+    title: "NASA Methodology for Physics of Failure-Based Reliability Assessments Handbook"
+    publisher: "NASA Goddard Space Flight Center"
+    license_status: "approved"
+    license_id: "US-GOV-WORK-PUBLIC-USE-PERMITTED"
+    license_evidence_url: "https://ntrs.nasa.gov/citations/20230004376"
+    third_party_material_status: "screened_no_explicit_restrictions"
+    review_notes: >-
+      NTRS metadata marks the 99-page NASA special publication Public and Work
+      of the US Gov., Public Use Permitted. The document is NASA-authored; the
+      extracted text contains one trademark reference but no notice restricting
+      document reuse. Selected for formulas, lifecycle diagrams, statistical
+      tables and cross-section reliability reasoning.

@@ -1,0 +1,68 @@
+schema_version: "0.1"
+project_root: "."
+
+paths:
+  discovery: "data/discovery/document_candidates.jsonl"
+  documents: "data/documents/documents.jsonl"
+  raw_pdfs: "raw_pdfs"
+  parsed: "parsed"
+  generated: "data/generated/candidates.jsonl"
+  verified: "data/validated/verified.jsonl"
+  rejected: "data/validated/rejected.jsonl"
+  hard: "data/validated/hard.jsonl"
+  exports: "data/exports"
+  logs: "logs"
+
+security:
+  forbidden_input_roots:
+    - "benchmarks"
+  forbidden_source_substrings:
+    - "huggingface.co/datasets/surgeai/GDP.pdf"
+    - "surgeai/GDP.pdf"
+  allowed_download_schemes:
+    - "https"
+  max_pdf_bytes: 209715200
+
+parse:
+  dpi: 144
+  image_format: "png"
+  native_text_min_chars_per_page: 40
+  enable_ocr_fallback: false
+
+generation:
+  candidates_per_document: 3
+  primary_evidence_type_weights:
+    visual_spatial: 0.40
+    structured_layout: 0.45
+    text_reasoning: 0.15
+
+difficulty:
+  minimum_evidence_nodes: 2
+  minimum_dependent_operations: 2
+  require_non_lookup_operation: true
+  require_controlling_evidence: true
+  require_tier_2_axis: true
+  require_tier_3_axis: true
+
+models:
+  generator:
+    provider: "openai_responses"
+    model: "gpt-6-astra"
+    base_url: null
+    api_key_env: "OPENAI_API_KEY"
+    reasoning_effort: "high"
+    max_output_tokens: 12000
+  verifier:
+    provider: "openai_compatible_chat"
+    model: "REPLACE_WITH_LOCAL_VLM"
+    base_url: "http://127.0.0.1:8000/v1"
+    api_key_env: "LOCAL_VLM_API_KEY"
+    reasoning_effort: null
+    max_output_tokens: 8000
+  judge:
+    provider: "openai_responses"
+    model: "gpt-5.6-sol"
+    base_url: null
+    api_key_env: "OPENAI_API_KEY"
+    reasoning_effort: "medium"
+    max_output_tokens: 2000

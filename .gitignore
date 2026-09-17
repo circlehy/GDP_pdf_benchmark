@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+.keenable/
+configs/local/
+
+# Generated data and large document artifacts
+data/
+raw_pdfs/
+parsed/
+evidence/
+generated/
+validated/
+logs/
+benchmarks/*
+!benchmarks/README.md
+*.pdf
+*.parquet
+*.jsonl
+*.log
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+.pytest_cache/
+.ruff_cache/

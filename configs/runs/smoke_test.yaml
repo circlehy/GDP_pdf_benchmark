@@ -1,0 +1,22 @@
+extends: "configs/default.yaml"
+run_id: "smoke_test_v0"
+source_manifest: "configs/sources/smoke_nasa.yaml"
+secrets_file: "configs/local/secrets.env"
+
+generation:
+  candidates_per_document: 1
+
+models:
+  generator:
+    max_output_tokens: 20000
+  verifier:
+    provider: "openai_responses"
+    model: "gpt-5.6-sol"
+    base_url: null
+    api_key_env: "OPENAI_API_KEY"
+    reasoning_effort: "high"
+    max_output_tokens: 10000
+
+parse:
+  dpi: 144
+  enable_ocr_fallback: false
