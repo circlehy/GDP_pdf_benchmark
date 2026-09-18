@@ -505,12 +505,17 @@ def evidence_bbox_alignment(
         bbox_text = "\n".join(block.text for block in intersecting_blocks if block.text)
         page_coverage = _token_coverage(node.excerpt, page.extracted_text)
         bbox_coverage = _token_coverage(node.excerpt, bbox_text)
+        visual_figure_node = candidate.task.requires_visual_evidence and bool(
+            re.match(r"\s*(?:figure|fig\.)\s*\d", node.excerpt, flags=re.IGNORECASE)
+        )
         page_is_text_match = page_coverage >= config.verification.audit_bbox_min_page_token_coverage
         bbox_is_relative_match = (
             bbox_coverage
             >= page_coverage * config.verification.audit_bbox_min_relative_token_coverage
         )
-        if page_is_text_match and bbox_is_relative_match:
+        if visual_figure_node:
+            status = "not_checkable_visual_or_ocr"
+        elif page_is_text_match and bbox_is_relative_match:
             status = "aligned"
         elif page_is_text_match:
             status = "misaligned"

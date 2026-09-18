@@ -170,6 +170,23 @@ evidence graph、claims、derivations、rubric、修复记录和验证日志只�
 .venv/bin/pdf-sft model-verify --config configs/runs/local_qwen_generate_glm_verify.yaml
 ```
 
+单 PDF 多困难任务实验使用分批生成和验证前去重：
+
+```bash
+.venv/bin/pdf-sft generate \
+  --config configs/runs/golden_v0_single_pdf_battery.yaml \
+  --document-id 8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57
+.venv/bin/pdf-sft static-verify --config configs/runs/golden_v0_single_pdf_battery.yaml
+.venv/bin/pdf-sft deduplicate --config configs/runs/golden_v0_single_pdf_battery.yaml
+.venv/bin/pdf-sft model-verify \
+  --config configs/runs/golden_v0_single_pdf_battery.yaml \
+  --records data/runs/golden_v0_single_pdf_battery/deduplicated.jsonl
+```
+
+该配置分两批各生成 3 个候选；第二批会接收第一批的证据页、操作和问题摘要并主动避重。
+`deduplicate` 在昂贵 verifier 之前比较 evidence bbox、页面、prompt 和操作路径，每份 PDF 最多
+保留 3 条。
+
 同一模型家族不能同时充当 generator 和正确性 verifier；这类记录会被标记为
 `needs_review`，不会进入 difficulty gate。交叉模型一致仍须与静态证据检查、确定性复算和
 人工抽检结合，不能单独视为 gold 正确。

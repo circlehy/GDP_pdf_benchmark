@@ -1,0 +1,170 @@
+{
+  "applied_bbox_repairs": 2,
+  "applied_rubric_overrides": 0,
+  "blockers": [
+    "export_not_release_ready"
+  ],
+  "deduplication": {
+    "input_path": "/mnt/weka/home/yuan.huang/GDP_pdf_benchmark/data/runs/golden_v0_single_pdf_battery/verified.jsonl",
+    "max_tasks_per_document": 3,
+    "output_path": "/mnt/weka/home/yuan.huang/GDP_pdf_benchmark/data/runs/golden_v0_single_pdf_battery/deduplicated.jsonl",
+    "rejected": 0,
+    "rejections": [],
+    "schema_version": "0.1",
+    "selected": 2,
+    "selected_candidates": [
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "predicted_label": "hard",
+        "primary_evidence_type": "visual_spatial",
+        "sample_id": "pdfsft_e90ab36ad602d9f120aa",
+        "structural_score": 0.9167
+      },
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "predicted_label": "hard",
+        "primary_evidence_type": "text_reasoning",
+        "sample_id": "pdfsft_1ef2a218c4a76a94f3cc",
+        "structural_score": 0.8667
+      }
+    ],
+    "selected_sample_ids": [
+      "pdfsft_e90ab36ad602d9f120aa",
+      "pdfsft_1ef2a218c4a76a94f3cc"
+    ]
+  },
+  "difficulty_admitted": 2,
+  "difficulty_assessed": 2,
+  "difficulty_labels": {
+    "hard": 2
+  },
+  "documents": 1,
+  "export": {
+    "allow_predicted_difficulty": true,
+    "estimated_total_sequence_tokens": 527144,
+    "input_path": "/mnt/weka/home/yuan.huang/GDP_pdf_benchmark/data/runs/golden_v0_single_pdf_battery/hard.jsonl",
+    "rejected_records": 0,
+    "release_ready": false,
+    "run_id": "golden_v0_single_pdf_battery",
+    "schema_version": "0.1",
+    "serialization_template_exact": false,
+    "sidecar_records": 2,
+    "split_counts": {
+      "internal_holdout": 0,
+      "train": 2,
+      "validation": 0
+    },
+    "text_content_token_accounting_exact": true,
+    "text_tokenizer_configured": true,
+    "token_accounting_exact": false,
+    "training_records": 2,
+    "vision_token_accounting_exact": false
+  },
+  "final_blockers": {},
+  "final_statuses": {
+    "passed": 2
+  },
+  "generated": 6,
+  "human_review_statuses": {
+    "approved": 2
+  },
+  "release_ready": false,
+  "repaired_records": 2,
+  "run_id": "golden_v0_single_pdf_battery",
+  "schema_version": "0.1",
+  "source_documents": 3,
+  "static_accepted": 2,
+  "static_rejected": 4,
+  "static_rejection_reasons": {
+    "gdp_like_structural_gate": 2,
+    "rubric_covers_all_gold_claims": 4
+  },
+  "task_type_distribution": {
+    "structured_layout": 3,
+    "text_reasoning": 1,
+    "visual_spatial": 2
+  },
+  "token_accounting": {
+    "document_text_tokens": 41596,
+    "estimated_input_tokens": 269170,
+    "generated_sequences": [
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "estimated_sequence_tokens": 263556,
+        "page_image_tokens": 221430,
+        "pages": 88,
+        "sample_id": "pdfsft_9feb1b4ef1bede13f8bb",
+        "sequence_utilization": 0.5026931762695312,
+        "text_content_tokens": 42126
+      },
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "estimated_sequence_tokens": 263632,
+        "page_image_tokens": 221430,
+        "pages": 88,
+        "sample_id": "pdfsft_70d759e909584a64d0ae",
+        "sequence_utilization": 0.502838134765625,
+        "text_content_tokens": 42202
+      },
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "estimated_sequence_tokens": 263648,
+        "page_image_tokens": 221430,
+        "pages": 88,
+        "sample_id": "pdfsft_564c57e375b09d6e7880",
+        "sequence_utilization": 0.50286865234375,
+        "text_content_tokens": 42218
+      },
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "estimated_sequence_tokens": 263607,
+        "page_image_tokens": 221430,
+        "pages": 88,
+        "sample_id": "pdfsft_1ef2a218c4a76a94f3cc",
+        "sequence_utilization": 0.5027904510498047,
+        "text_content_tokens": 42177
+      },
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "estimated_sequence_tokens": 263537,
+        "page_image_tokens": 221430,
+        "pages": 88,
+        "sample_id": "pdfsft_e90ab36ad602d9f120aa",
+        "sequence_utilization": 0.5026569366455078,
+        "text_content_tokens": 42107
+      },
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "estimated_sequence_tokens": 263550,
+        "page_image_tokens": 221430,
+        "pages": 88,
+        "sample_id": "pdfsft_7a7f3a06f4ad7b3ef271",
+        "sequence_utilization": 0.5026817321777344,
+        "text_content_tokens": 42120
+      }
+    ],
+    "image_tokens_exact": false,
+    "package_count": 1,
+    "packages": [
+      {
+        "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+        "document_text_tokens": 41596,
+        "estimated_input_tokens": 269170,
+        "image_tokens_exact": false,
+        "input_utilization": 0.5134010314941406,
+        "page_image_dpi": 150,
+        "page_image_tokens": 221430,
+        "pages": 88,
+        "text_tokens_exact": true
+      }
+    ],
+    "page_image_tokens": 221430,
+    "text_tokens_exact": true,
+    "tokenizer_or_estimator": [
+      "hf-fast:ilikejson-250k-tokenizer:sha256:7e4c364927e79537"
+    ]
+  },
+  "verifier_statuses": {
+    "passed": 2
+  }
+}

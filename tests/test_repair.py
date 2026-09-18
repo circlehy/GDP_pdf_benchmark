@@ -7,8 +7,17 @@ import pymupdf
 
 from pdf_sft.config import load_config
 from pdf_sft.io import write_json_atomic, write_jsonl_atomic
-from pdf_sft.schemas import BoundingBox, GeneratedCandidate, ParsedBlock, ParsedDocument, ParsedPage
-from pdf_sft.stages.repair import run_apply_bbox_repairs
+from pdf_sft.schemas import (
+    BoundingBox,
+    GeneratedCandidate,
+    IndependentReconstruction,
+    ParsedBlock,
+    ParsedDocument,
+    ParsedPage,
+    ValidationCheck,
+    VerificationDecision,
+)
+from pdf_sft.stages.repair import _refresh_unmodified_bbox_result, run_apply_bbox_repairs
 from pdf_sft.stages.review_pack import _bbox_review_assets
 from pdf_sft.stages.verify import verify_candidate_static
 
@@ -128,3 +137,78 @@ def test_bbox_repair_requires_resolved_decision_and_writes_new_artifact(
         "y0": 0.05,
         "y1": 0.2,
     }
+
+
+def test_empty_visual_suggestions_refresh_stale_bbox_status(
+    valid_candidate: GeneratedCandidate,
+    tmp_path: Path,
+) -> None:
+    config = load_config(Path("configs/runs/smoke_test.yaml"))
+    candidate = valid_candidate.model_copy(deep=True)
+    candidate.task.requires_visual_evidence = True
+    for index, node in enumerate(candidate.task.evidence_graph.nodes, 1):
+        node.excerpt = f"Figure {index}-1 visual relationship"
+    parsed = ParsedDocument(
+        document_id=candidate.document_id,
+        parser="test",
+        parser_version="1",
+        dpi=144,
+        page_count=2,
+        pages=[
+            ParsedPage(
+                page_number=page_number,
+                width_points=612,
+                height_points=792,
+                image_path=tmp_path / f"page_{page_number}.png",
+                extracted_text=node.excerpt or "",
+                extracted_text_chars=len(node.excerpt or ""),
+                native_text=node.excerpt or "",
+                native_text_chars=len(node.excerpt or ""),
+                needs_ocr=False,
+                blocks=[],
+            )
+            for page_number, node in enumerate(candidate.task.evidence_graph.nodes, 1)
+        ],
+    )
+    record = verify_candidate_static(candidate, parsed, config).model_copy(
+        update={
+            "checks": [
+                ValidationCheck(
+                    check="independent_evidence_bbox_alignment",
+                    passed=False,
+                    details="stale visual-text mismatch",
+                ),
+                ValidationCheck(check="independent_audit_output_complete", passed=True),
+            ],
+            "independent_reconstruction": IndependentReconstruction(
+                reconstructed_answer="A complete independent answer.",
+                input_complete=True,
+                cited_pages=[1, 2],
+                uncertainties=[],
+                missing_information=[],
+            ),
+            "independent_verification": VerificationDecision(
+                reconstructed_answer="The gold is supported.",
+                verified_claim_ids=["c1"],
+                disputed_claim_ids=[],
+                missing_evidence_node_ids=[],
+                input_complete=True,
+                gold_supported=True,
+                requires_human_review=False,
+                failure_reasons=[],
+            ),
+            "independent_verifier_status": "needs_review",
+        }
+    )
+
+    refreshed = _refresh_unmodified_bbox_result(
+        record,
+        parsed,
+        config,
+        ValidationCheck(check="bbox_repair_decisions_resolved", passed=True),
+    )
+
+    assert refreshed.independent_verifier_status == "passed"
+    assert next(
+        item for item in refreshed.checks if item.check == "independent_evidence_bbox_alignment"
+    ).passed

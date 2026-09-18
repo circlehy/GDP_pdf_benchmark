@@ -1,0 +1,21 @@
+{
+  "decisions": [
+    {
+      "accepted_bbox": null,
+      "decision": "accepted",
+      "node_id": "e2",
+      "notes": "人工接受 LiteParse block p49_b6 的高置信度建议 bbox。",
+      "reviewer": "yuan.huang"
+    },
+    {
+      "accepted_bbox": null,
+      "decision": "accepted",
+      "node_id": "e6",
+      "notes": "人工接受 LiteParse block p44_b7 的高置信度建议 bbox。",
+      "reviewer": "yuan.huang"
+    }
+  ],
+  "mutation_applied": false,
+  "sample_id": "pdfsft_1ef2a218c4a76a94f3cc",
+  "schema_version": "0.1"
+}

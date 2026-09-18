@@ -66,6 +66,7 @@ class PathConfig(BaseModel):
     input_packages: Path
     generated: Path
     verified: Path
+    deduplicated: Path = Path("data/validated/deduplicated.jsonl")
     repaired: Path
     finalized: Path
     rejected: Path
@@ -147,6 +148,11 @@ class DocumentViewConfig(BaseModel):
 
 class GenerationConfig(BaseModel):
     candidates_per_document: int = Field(default=3, ge=1, le=20)
+    batches_per_document: int = Field(default=1, ge=1, le=10)
+    target_difficulty: Literal["standard", "hard"] = "standard"
+    hard_min_evidence_nodes: int = Field(default=3, ge=2, le=12)
+    hard_min_evidence_pages: int = Field(default=2, ge=2, le=8)
+    hard_min_dependent_operations: int = Field(default=3, ge=2, le=12)
     max_structure_repair_attempts: int = Field(default=1, ge=0, le=2)
     primary_evidence_type_weights: dict[str, float]
 
@@ -155,6 +161,15 @@ class GenerationConfig(BaseModel):
         if abs(sum(self.primary_evidence_type_weights.values()) - 1.0) > 1e-6:
             raise ValueError("primary_evidence_type_weights must sum to 1.0")
         return self
+
+
+class DeduplicationConfig(BaseModel):
+    max_tasks_per_document: int = Field(default=3, ge=1, le=20)
+    bbox_match_iou: float = Field(default=0.30, ge=0, le=1)
+    max_evidence_page_jaccard: float = Field(default=0.50, ge=0, le=1)
+    max_evidence_region_jaccard: float = Field(default=0.50, ge=0, le=1)
+    max_prompt_token_jaccard: float = Field(default=0.75, ge=0, le=1)
+    max_page_operation_jaccard: float = Field(default=0.80, ge=0, le=1)
 
 
 class DifficultyConfig(BaseModel):
@@ -228,6 +243,7 @@ class AppConfig(BaseModel):
     context_budget: ContextBudgetConfig
     document_view: DocumentViewConfig = Field(default_factory=DocumentViewConfig)
     generation: GenerationConfig
+    deduplication: DeduplicationConfig = Field(default_factory=DeduplicationConfig)
     difficulty: DifficultyConfig
     models: ModelsConfig
     verification: VerificationConfig = Field(default_factory=VerificationConfig)

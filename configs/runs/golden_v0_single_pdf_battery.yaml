@@ -1,0 +1,29 @@
+extends: "configs/runs/initial_pipeline_v1.yaml"
+run_id: "golden_v0_single_pdf_battery"
+
+paths:
+  generated: "data/runs/golden_v0_single_pdf_battery/generated.jsonl"
+  verified: "data/runs/golden_v0_single_pdf_battery/verified.jsonl"
+  deduplicated: "data/runs/golden_v0_single_pdf_battery/deduplicated.jsonl"
+  repaired: "data/runs/golden_v0_single_pdf_battery/repaired.jsonl"
+  finalized: "data/runs/golden_v0_single_pdf_battery/finalized.jsonl"
+  rejected: "data/runs/golden_v0_single_pdf_battery/rejected.jsonl"
+  hard: "data/runs/golden_v0_single_pdf_battery/hard.jsonl"
+  exports: "data/runs/golden_v0_single_pdf_battery/exports"
+
+generation:
+  # Two independent calls keep each structured response within the 24K GLM output budget.
+  candidates_per_document: 3
+  batches_per_document: 2
+  target_difficulty: "hard"
+  hard_min_evidence_nodes: 4
+  hard_min_evidence_pages: 3
+  hard_min_dependent_operations: 4
+
+deduplication:
+  max_tasks_per_document: 3
+  bbox_match_iou: 0.30
+  max_evidence_page_jaccard: 0.50
+  max_evidence_region_jaccard: 0.50
+  max_prompt_token_jaccard: 0.75
+  max_page_operation_jaccard: 0.80

@@ -11,6 +11,7 @@ from pdf_sft.config import AppConfig, load_config
 from pdf_sft.manifests import stage_manifest
 from pdf_sft.schemas import InputProfile
 from pdf_sft.stages.build_input import run_build_input
+from pdf_sft.stages.deduplicate import run_deduplicate
 from pdf_sft.stages.difficulty_gate import run_difficulty_gate
 from pdf_sft.stages.discover import run_discover
 from pdf_sft.stages.export import run_export
@@ -164,7 +165,11 @@ def command_generate(args: argparse.Namespace) -> None:
         inputs=[config.paths.documents, prompt_path],
         outputs=[config.paths.generated],
         function=lambda: run_generate(
-            config, prompt_path, limit=args.limit, overwrite=args.overwrite
+            config,
+            prompt_path,
+            limit=args.limit,
+            overwrite=args.overwrite,
+            document_ids=args.document_id,
         ),
         count=lambda records: {"candidates": len(records)},
     )
@@ -211,6 +216,39 @@ def command_static_verify(args: argparse.Namespace) -> None:
     print(
         "Accepted records remain ineligible for difficulty scoring until all final-validation "
         "gates pass"
+    )
+
+
+def command_deduplicate(args: argparse.Namespace) -> None:
+    config = _load(args)
+    input_path = (
+        _resolve_project_path(config, args.records)
+        if args.records is not None
+        else config.paths.verified
+    )
+    output_path = (
+        _resolve_project_path(config, args.output)
+        if args.output is not None
+        else config.paths.deduplicated
+    )
+    selected, report = _run_manifested(
+        config=config,
+        config_path=args.config,
+        stage="deduplicate",
+        inputs=[input_path],
+        outputs=[output_path, output_path.with_suffix(".report.json")],
+        function=lambda: run_deduplicate(
+            config,
+            input_path=input_path,
+            output_path=output_path,
+        ),
+        count=lambda result: {
+            "selected": len(result[0]),
+            "rejected": result[1]["rejected"],
+        },
+    )
+    print(
+        f"Deduplication: {len(selected)} selected, {report['rejected']} rejected -> {output_path}"
     )
 
 
@@ -431,6 +469,7 @@ def command_report(args: argparse.Namespace) -> None:
         inputs=[
             config.paths.generated,
             config.paths.verified,
+            config.paths.deduplicated,
             config.paths.rejected,
             config.paths.repaired,
             config.paths.finalized,
@@ -492,6 +531,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Regenerate completed documents instead of resuming",
     )
+    generate.add_argument(
+        "--document-id",
+        action="append",
+        default=None,
+        help="Generate only for this full document ID or SHA-256 suffix; repeat as needed",
+    )
     generate.set_defaults(handler=command_generate)
 
     verify = subparsers.add_parser(
@@ -499,6 +544,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_config_argument(verify)
     verify.set_defaults(handler=command_static_verify)
+
+    deduplicate = subparsers.add_parser(
+        "deduplicate", help="Select diverse static-passed candidates before model verification"
+    )
+    _add_config_argument(deduplicate)
+    deduplicate.add_argument(
+        "--records", type=Path, default=None, help="Validated JSONL; defaults to paths.verified"
+    )
+    deduplicate.add_argument(
+        "--output", type=Path, default=None, help="Output JSONL; defaults to paths.deduplicated"
+    )
+    deduplicate.set_defaults(handler=command_deduplicate)
 
     model_verify = subparsers.add_parser(
         "model-verify", help="Blindly reconstruct answers and independently audit gold claims"

@@ -16,7 +16,7 @@ from pdf_sft.schemas import (
     ValidatedCandidate,
     ValidationCheck,
 )
-from pdf_sft.stages.verify import verify_candidate_static
+from pdf_sft.stages.verify import evidence_bbox_alignment, verify_candidate_static
 
 
 def _load_json(path: Path) -> dict:
@@ -27,6 +27,60 @@ def _check_with_replacement(
     checks: list[ValidationCheck], replacement: ValidationCheck
 ) -> list[ValidationCheck]:
     return [check for check in checks if check.check != replacement.check] + [replacement]
+
+
+def _refresh_unmodified_bbox_result(
+    record: ValidatedCandidate,
+    parsed: ParsedDocument,
+    config: AppConfig,
+    repair_check: ValidationCheck,
+) -> ValidatedCandidate:
+    """Refresh deterministic bbox state without discarding a completed model audit."""
+
+    alignments = evidence_bbox_alignment(record.candidate, parsed, config)
+    invalid_ids = [
+        item["node_id"] for item in alignments if item["status"] in {"misaligned", "missing_page"}
+    ]
+    bbox_check = ValidationCheck(
+        check="independent_evidence_bbox_alignment",
+        passed=not invalid_ids,
+        details=(
+            None
+            if not invalid_ids
+            else f"Misaligned or missing evidence bboxes: {', '.join(invalid_ids)}"
+        ),
+    )
+    checks = _check_with_replacement(record.checks, bbox_check)
+    checks = _check_with_replacement(checks, repair_check)
+
+    status = record.independent_verifier_status
+    reconstruction = record.independent_reconstruction
+    decision = record.independent_verification
+    audit_check = next(
+        (item for item in checks if item.check == "independent_audit_output_complete"), None
+    )
+    if status == "needs_review" and reconstruction is not None and decision is not None:
+        if (
+            decision.requires_human_review
+            or not reconstruction.input_complete
+            or not decision.input_complete
+            or audit_check is None
+            or not audit_check.passed
+            or not bbox_check.passed
+        ):
+            status = "needs_review"
+        elif decision.gold_supported and not decision.disputed_claim_ids:
+            status = "passed"
+        else:
+            status = "failed"
+
+    return record.model_copy(
+        update={
+            "checks": checks,
+            "independent_verifier_status": status,
+            "eligible_for_difficulty": False,
+        }
+    )
 
 
 def run_apply_bbox_repairs(
@@ -103,13 +157,11 @@ def run_apply_bbox_repairs(
             repair_check = ValidationCheck(
                 check="bbox_repair_decisions_resolved", passed=True, details=None
             )
+            parsed = parsed_by_id.get(candidate.document_id)
+            if parsed is None:
+                raise ValueError(f"Missing parsed document for {candidate.document_id}")
             output_records.append(
-                record.model_copy(
-                    update={
-                        "checks": _check_with_replacement(record.checks, repair_check),
-                        "eligible_for_difficulty": False,
-                    }
-                )
+                _refresh_unmodified_bbox_result(record, parsed, config, repair_check)
             )
             continue
         if not decisions_path.exists():

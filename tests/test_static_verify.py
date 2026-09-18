@@ -279,13 +279,28 @@ def test_evidence_bbox_alignment_distinguishes_correct_and_incorrect_regions(
     assert valid_candidate.task.evidence_graph.nodes[0].bbox == BoundingBox(
         x0=0.05, y0=0.05, x1=0.45, y1=0.20
     )
-
     valid_candidate.task.evidence_graph.nodes[0].bbox = BoundingBox(
         x0=0.50, y0=0.50, x1=0.95, y1=0.70
     )
     result = evidence_bbox_alignment(valid_candidate, parsed, config)
     assert result[0]["status"] == "aligned"
     assert result[0]["intersecting_block_ids"] == ["right-region"]
+
+
+def test_visual_figure_bbox_is_deferred_to_human_visual_review(
+    valid_candidate: GeneratedCandidate,
+) -> None:
+    config = load_config(Path("configs/runs/smoke_test.yaml"))
+    valid_candidate.task.requires_visual_evidence = True
+    valid_candidate.task.evidence_graph.nodes[
+        0
+    ].excerpt = "Figure 4-1. The upper panel shows the upright cell geometry."
+    parsed = parsed_document(2)
+
+    result = evidence_bbox_alignment(valid_candidate, parsed, config)
+
+    assert result[0]["status"] == "not_checkable_visual_or_ocr"
+    assert evidence_bbox_repair_suggestions(valid_candidate, parsed, config, result) == []
 
 
 def test_model_family_normalizes_local_model_aliases() -> None:

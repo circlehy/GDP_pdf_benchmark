@@ -10,6 +10,7 @@ paths:
   input_packages: "data/input_packages"
   generated: "data/generated/candidates.jsonl"
   verified: "data/validated/verified.jsonl"
+  deduplicated: "data/validated/deduplicated.jsonl"
   repaired: "data/validated/repaired.jsonl"
   finalized: "data/validated/finalized.jsonl"
   rejected: "data/validated/rejected.jsonl"
@@ -67,11 +68,24 @@ document_view:
 
 generation:
   candidates_per_document: 3
+  batches_per_document: 1
+  target_difficulty: "standard"
+  hard_min_evidence_nodes: 3
+  hard_min_evidence_pages: 2
+  hard_min_dependent_operations: 3
   max_structure_repair_attempts: 1
   primary_evidence_type_weights:
     visual_spatial: 0.40
     structured_layout: 0.45
     text_reasoning: 0.15
+
+deduplication:
+  max_tasks_per_document: 3
+  bbox_match_iou: 0.30
+  max_evidence_page_jaccard: 0.50
+  max_evidence_region_jaccard: 0.50
+  max_prompt_token_jaccard: 0.75
+  max_page_operation_jaccard: 0.80
 
 difficulty:
   minimum_evidence_nodes: 2

@@ -1,0 +1,59 @@
+{
+  "document_id": "sha256:8ee157a5465ef564105839ef5cedf8c511917057d76adb85e7642d21fa8e8c57",
+  "generator": "deterministic_liteparse_block_match_v0",
+  "mutation_applied": false,
+  "sample_id": "pdfsft_1ef2a218c4a76a94f3cc",
+  "schema_version": "0.1",
+  "suggestions": [
+    {
+      "alignment_status": "misaligned",
+      "confidence": "high",
+      "matched_block_ids": [
+        "p49_b6"
+      ],
+      "node_id": "e2",
+      "original_bbox": {
+        "x0": 0.08,
+        "x1": 0.92,
+        "y0": 0.4,
+        "y1": 0.55
+      },
+      "original_token_coverage": 0.0556,
+      "page_number": 49,
+      "reason": "Suggested bbox is the union of the highest-scoring contiguous LiteParse block window. Human acceptance is required before mutation.",
+      "score": 0.8842,
+      "suggested_bbox": {
+        "x0": 0.09016393442622951,
+        "x1": 0.8776066014024078,
+        "y0": 0.6783459595959596,
+        "y1": 0.8612247813831676
+      },
+      "suggested_token_coverage": 1.0
+    },
+    {
+      "alignment_status": "misaligned",
+      "confidence": "high",
+      "matched_block_ids": [
+        "p44_b7"
+      ],
+      "node_id": "e6",
+      "original_bbox": {
+        "x0": 0.08,
+        "x1": 0.92,
+        "y0": 0.12,
+        "y1": 0.3
+      },
+      "original_token_coverage": 0.1333,
+      "page_number": 44,
+      "reason": "Suggested bbox is the union of the highest-scoring contiguous LiteParse block window. Human acceptance is required before mutation.",
+      "score": 0.9304,
+      "suggested_bbox": {
+        "x0": 0.16557377049180327,
+        "x1": 0.9058524710233095,
+        "y0": 0.4371843434343434,
+        "y1": 0.5037752401949179
+      },
+      "suggested_token_coverage": 1.0
+    }
+  ]
+}

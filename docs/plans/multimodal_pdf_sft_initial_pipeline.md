@@ -1626,6 +1626,46 @@ difficulty 随后给出 `0.6333 / medium`，低于 `hard >= 0.65` 门槛；而�
 只收 hard 的 release export。最新漏斗为 3 generated → 1 static accepted → 1 final passed →
 1 difficulty assessed → 0 hard admitted → 0 exported。
 
+### 20.5 单 PDF 多 hard-task 实验
+
+Checkpoint `7f406d0` 之后新增 `golden_v0_single_pdf_battery` 实验。生成器支持重复
+`--document-id` 精确选文档、`batches_per_document` 断点续跑，以及第二批读取前批候选摘要后
+主动避开相同证据和问题。Hard profile 对每题要求至少 4 个决定性 evidence nodes、3 个证据页、
+4 个依赖操作、2 个非 lookup 操作，并要求多阶段专业决策和近似项/例外陷阱。
+
+新增的 `deduplicate` stage 在 model verifier 前比较：
+
+- 同页 bbox IoU 匹配后的 evidence-region Jaccard；
+- evidence-page Jaccard；
+- prompt token Jaccard；
+- operation-type Jaccard；
+- 每文档上限与 primary-evidence-type 多样性。
+
+88 页电池手册分两批各生成 3 题，类型配额得到 3 structured、2 visual、1 text。Static gate
+保留 2/6：跨 pages 44/47/49/50 的锌空气储存与析氢任务，以及跨 pages 19/22/23、必须读取
+Figure 4-1 的银锌防漏空间任务；两题 evidence 不重叠，去重后均保留，结构难度分别为
+`0.8667 hard` 与 `0.9167 hard`。其余四题中，两题存在 key evidence 未接入 final output，四题均
+存在 rubric 未直接覆盖 gold claim 的问题。生成器现已把这些检查前移到每批返回后，并利用既有
+一次 structure-repair retry 修复，避免下一轮到 static gate 才浪费候选。
+
+Qwen3.8-27B-512K 在完整 88 页 blind 输入上正确解出两题，focused audit 也确认全部 gold
+claims，因此它们是结构 hard、gold 可靠，但不是当前 Qwen 的真实失败题。文本任务只剩 e2/e6
+两个 high-confidence bbox 修订待人工确认（coverage 均提升到 1.0）；视觉任务的 Figure 4-1
+原始 crop 正确，文本 coverage 不适合作为图形 bbox 判据。alignment gate 已将明确的 Figure
+视觉节点改为 `not_checkable_visual_or_ocr`，交由 `visual_evidence_verified` 人工项确认。
+
+人工 reviewer `yuan.huang` 随后批准两题的问题、gold、推导和 rubric，确认视觉任务原始 bbox
+与图像证据，并接受文本任务 e2/e6 的高置信度建议 bbox。Repair stage 共应用 2 个文本 bbox；
+未修改的视觉任务按新 alignment 规则刷新确定性检查并复用已完成的独立模型审计，修改后的文本
+任务则重新执行完整 blind reconstruction 与 focused audit。最终 Qwen 独立核验 2/2 passed，
+`finalize` 2/2 passed，predicted difficulty 2/2 admitted as hard，pilot export 得到 2 条训练记录和
+2 条审计 sidecar，0 rejected，估算总序列长度 527,144 tokens。
+
+该导出仍明确为 `release_ready=false`：两题的 hard 仅由结构规则预测，未通过 solver-failure judge；
+视觉 token 和最终 chat serialization 也仍是估算。这个结果证明 Initial Pipeline 已能完成
+“多候选生成 → static gate → 去重 → 独立 gold audit → 人工 bbox/内容签核 → 修复后复核 →
+final gate → pilot export”的闭环，但不能把 pilot 标签误写成正式 release-ready 数据。
+
 ## 21. Source of Truth 与参考文档
 
 本文是当前 Initial Pipeline 的总计划。更细的任务模板和准入规则见：

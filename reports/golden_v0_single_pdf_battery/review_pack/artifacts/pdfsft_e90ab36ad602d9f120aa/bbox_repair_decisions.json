@@ -1,0 +1,14 @@
+{
+  "decisions": [
+    {
+      "accepted_bbox": null,
+      "decision": "rejected",
+      "node_id": "e1",
+      "notes": "原始 Figure 4-1 bbox 与图像证据经人工核验正确，无需按旧文本匹配建议移动。",
+      "reviewer": "yuan.huang"
+    }
+  ],
+  "mutation_applied": false,
+  "sample_id": "pdfsft_e90ab36ad602d9f120aa",
+  "schema_version": "0.1"
+}

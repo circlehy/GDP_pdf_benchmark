@@ -35,18 +35,34 @@ def run_report(config: AppConfig, output_path: Path) -> dict:
     generated = [
         GeneratedCandidate.model_validate(payload) for payload in read_jsonl(config.paths.generated)
     ]
-    verified = _validated(config.paths.verified)
+    generated_document_ids = {candidate.document_id for candidate in generated}
+    static_verified = _validated(config.paths.verified)
+    verification_path = (
+        config.paths.deduplicated if config.paths.deduplicated.exists() else config.paths.verified
+    )
+    verified = _validated(verification_path)
     rejected = _validated(config.paths.rejected)
     repaired = _validated(config.paths.repaired)
     finalized = _validated(config.paths.finalized)
+    latest_verified = finalized or repaired or verified
     difficulty = [
         DifficultyRecord.model_validate(payload) for payload in read_jsonl(config.paths.hard)
     ]
     input_packages = _input_packages(config)
+    if generated_document_ids:
+        input_packages = [
+            package for package in input_packages if package.document_id in generated_document_ids
+        ]
     export_manifest_path = config.paths.exports / "manifest.json"
     export_manifest = (
         json.loads(export_manifest_path.read_text(encoding="utf-8"))
         if export_manifest_path.exists()
+        else None
+    )
+    dedup_report_path = config.paths.deduplicated.with_suffix(".report.json")
+    dedup_report = (
+        json.loads(dedup_report_path.read_text(encoding="utf-8"))
+        if dedup_report_path.exists()
         else None
     )
     static_reasons = Counter(
@@ -124,17 +140,19 @@ def run_report(config: AppConfig, output_path: Path) -> dict:
     summary = {
         "schema_version": "0.1",
         "run_id": config.run_id,
-        "documents": sum(1 for _ in read_jsonl(config.paths.documents)),
+        "source_documents": sum(1 for _ in read_jsonl(config.paths.documents)),
+        "documents": len(generated_document_ids),
         "generated": len(generated),
         "task_type_distribution": dict(
             Counter(item.task.primary_evidence_type.value for item in generated)
         ),
-        "static_accepted": len(verified),
+        "static_accepted": len(static_verified),
         "static_rejected": len(rejected),
         "static_rejection_reasons": dict(static_reasons),
         "verifier_statuses": dict(
-            Counter(record.independent_verifier_status for record in verified)
+            Counter(record.independent_verifier_status for record in latest_verified)
         ),
+        "deduplication": dedup_report,
         "repaired_records": len(repaired),
         "applied_bbox_repairs": sum(len(record.bbox_repairs) for record in repaired),
         "applied_rubric_overrides": sum(len(record.rubric_overrides) for record in finalized),
@@ -165,8 +183,10 @@ def run_report(config: AppConfig, output_path: Path) -> dict:
         f"# Pipeline report: {config.run_id}",
         "",
         f"- Documents: **{summary['documents']}**",
+        f"- Available source documents: **{summary['source_documents']}**",
         f"- Generated: **{summary['generated']}** — `{summary['task_type_distribution']}`",
-        f"- Static accepted/rejected: **{len(verified)} / {len(rejected)}**",
+        f"- Static accepted/rejected: **{len(static_verified)} / {len(rejected)}**",
+        f"- Candidates after deduplication: **{len(verified)}**",
         f"- Verifier statuses: `{summary['verifier_statuses']}`",
         f"- Applied bbox repairs: **{summary['applied_bbox_repairs']}**",
         f"- Applied rubric overrides: **{summary['applied_rubric_overrides']}**",

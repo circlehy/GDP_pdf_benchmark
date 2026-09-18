@@ -1,0 +1,16 @@
+{
+  "checklist": {
+    "derivations_verified": true,
+    "gold_answer_verified": true,
+    "omitted_page_audit_verified": false,
+    "question_unambiguous": true,
+    "rubric_negative_cases_verified": true,
+    "visual_evidence_verified": true
+  },
+  "decision": "approved",
+  "notes": "问题、gold、推导和 rubric 均通过；原始视觉 bbox 与图像证据经人工核验通过。",
+  "reviewer": "yuan.huang",
+  "reviewer_type": "human",
+  "sample_id": "pdfsft_e90ab36ad602d9f120aa",
+  "schema_version": "0.1"
+}
